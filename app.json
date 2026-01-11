@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Magic Board Training",
+    "slug": "mb-mobile-training",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#6366f1"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.magicboard.training"
+    },
+    "android": {
+      "package": "com.magicboard.training"
+    },
+    "scheme": "mbtraining"
+  }
+}
