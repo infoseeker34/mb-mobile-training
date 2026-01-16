@@ -10,6 +10,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/auth/LoginScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
+import ProfileScreen from '../screens/profile/ProfileScreen';
 import MainNavigator from './MainNavigator';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import Colors from '../constants/Colors';
@@ -38,7 +39,19 @@ const AppNavigator = () => {
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         ) : (
           // Main App
-          <Stack.Screen name="Main" component={MainNavigator} />
+          <>
+            <Stack.Screen name="Main" component={MainNavigator} />
+            <Stack.Screen 
+              name="Profile" 
+              component={ProfileScreen}
+              options={{
+                presentation: 'modal',
+                headerShown: true,
+                headerTitle: 'Profile',
+                headerBackTitle: 'Back',
+              }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

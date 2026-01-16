@@ -17,6 +17,9 @@
     "android": {
       "package": "com.magicboard.training"
     },
-    "scheme": "mbtraining"
+    "scheme": "mbtraining",
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

@@ -105,18 +105,6 @@ export const AuthProvider = ({ children }) => {
       // Save tokens
       await SecureStorage.saveTokens(accessToken, refreshToken, idToken);
 
-      // Debug: Call backend to see what both tokens contain
-      try {
-        const debugApi = (await import('../services/api/debugApi')).default;
-        const debugResponse = await debugApi.debugTokens();
-        console.log('=== TOKEN DEBUG INFO ===');
-        console.log('Access Token:', JSON.stringify(debugResponse.data.accessToken, null, 2));
-        console.log('ID Token:', JSON.stringify(debugResponse.data.idToken, null, 2));
-        console.log('========================');
-      } catch (debugError) {
-        console.error('Debug token call failed:', debugError);
-      }
-
       // Validate token and get user info
       await validateAndLoadUser(idTokenPayload);
     } catch (error) {
@@ -152,8 +140,8 @@ export const AuthProvider = ({ children }) => {
           setUser(profileResponse.data.user);
         } catch (profileError) {
           // Profile doesn't exist yet (first-time user)
-          // Set basic user data from validation with ID token info
-          console.log('Profile not found, using basic user data:', userData);
+          // Set basic user data from validation
+          console.log('Profile fetch failed, using basic user data:', profileError.message);
           setUser(userData);
         }
         
@@ -163,25 +151,59 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error validating token:', error);
-      await logout();
+      
+      // Token is invalid or expired - try to refresh it
+      console.log('Token validation failed, attempting refresh...');
+      try {
+        const refreshToken = await SecureStorage.getRefreshToken();
+        if (refreshToken) {
+          const refreshResponse = await authApi.refreshToken(refreshToken);
+          
+          if (refreshResponse.status === 'success' && refreshResponse.data.tokens) {
+            console.log('Token refresh successful');
+            const { accessToken, idToken } = refreshResponse.data.tokens;
+            
+            // Save new tokens (keep existing refresh token)
+            await SecureStorage.saveTokens(accessToken, refreshToken, idToken);
+            
+            // Retry validation with new token
+            const newIdTokenPayload = idToken ? decodeJWT(idToken) : null;
+            await validateAndLoadUser(newIdTokenPayload);
+            return;
+          }
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+      }
+      
+      // Refresh failed - clear everything and require re-login
+      console.log('Token refresh failed, clearing auth state');
+      await SecureStorage.clearTokens();
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Check authentication status on app start
+  // Check if user is already authenticated
   const checkAuthStatus = async () => {
-    setIsLoading(true);
     try {
-      const tokens = await SecureStorage.getTokens();
+      const accessToken = await SecureStorage.getAccessToken();
       
-      if (tokens.accessToken) {
+      if (accessToken) {
+        console.log('Found stored access token, validating...');
         await validateAndLoadUser();
       } else {
+        console.log('No stored access token found');
         setIsLoading(false);
       }
     } catch (error) {
       console.error('Error checking auth status:', error);
+      // Clear any invalid tokens
+      await SecureStorage.clearTokens();
+      setUser(null);
+      setIsAuthenticated(false);
       setIsLoading(false);
     }
   };

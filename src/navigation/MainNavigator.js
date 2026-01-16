@@ -6,11 +6,60 @@
 
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/home/HomeScreen';
+import TrainingScreen from '../screens/training/TrainingScreen';
+import CalendarScreen from '../screens/calendar/CalendarScreen';
+import PlanDetailsScreen from '../screens/training/PlanDetailsScreen';
+import ActiveTrainingScreen from '../screens/training/ActiveTrainingScreen';
+import MessagesScreen from '../screens/messages/MessagesScreen';
 import Colors from '../constants/Colors';
 import Layout from '../constants/Layout';
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+// Calendar Stack Navigator (includes Calendar, PlanDetails, and ActiveTraining screens)
+const CalendarStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="CalendarMain" 
+        component={CalendarScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="PlanDetails" 
+        component={PlanDetailsScreen}
+        options={({ route }) => ({
+          title: route.params?.programName || 'Plan Details',
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        })}
+      />
+      <Stack.Screen 
+        name="ActiveTraining" 
+        component={ActiveTrainingScreen}
+        options={{
+          title: 'Training Session',
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
 
 const MainNavigator = () => {
   return (
@@ -41,56 +90,65 @@ const MainNavigator = () => {
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="🏠" color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "home" : "home-outline"} 
+              size={size} 
+              color={color} 
+            />
           ),
           headerTitle: 'Magic Board Training',
         }}
       />
       
-      {/* Placeholder tabs for future features */}
       <Tab.Screen
         name="Training"
-        component={PlaceholderScreen}
+        component={TrainingScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="🎯" color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "barbell" : "barbell-outline"} 
+              size={size} 
+              color={color} 
+            />
           ),
+          headerShown: false,
         }}
       />
       
       <Tab.Screen
-        name="Progress"
-        component={PlaceholderScreen}
+        name="Calendar"
+        component={CalendarStack}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="📊" color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "calendar" : "calendar-outline"} 
+              size={size} 
+              color={color} 
+            />
           ),
+          headerShown: false,
         }}
       />
       
       <Tab.Screen
-        name="Profile"
-        component={PlaceholderScreen}
+        name="Messages"
+        component={MessagesScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="👤" color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "chatbubbles" : "chatbubbles-outline"} 
+              size={size} 
+              color={color} 
+            />
           ),
+          headerShown: false,
         }}
       />
     </Tab.Navigator>
   );
 };
 
-// Simple tab icon component
-const TabIcon = ({ icon, color }) => {
-  const { Text } = require('react-native');
-  return (
-    <Text style={{ fontSize: 24, color: color }}>
-      {icon}
-    </Text>
-  );
-};
 
 // Placeholder screen for tabs not yet implemented
 const PlaceholderScreen = () => {
