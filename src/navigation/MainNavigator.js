@@ -20,6 +20,38 @@ import Layout from '../constants/Layout';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Training Stack Navigator (includes Training, PlanDetails, and ActiveTraining screens)
+const TrainingStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="TrainingMain" 
+        component={TrainingScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="PlanDetails" 
+        component={PlanDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ActiveTraining" 
+        component={ActiveTrainingScreen}
+        options={{
+          title: 'Training Session',
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 // Calendar Stack Navigator (includes Calendar, PlanDetails, and ActiveTraining screens)
 const CalendarStack = () => {
   return (
@@ -32,16 +64,7 @@ const CalendarStack = () => {
       <Stack.Screen 
         name="PlanDetails" 
         component={PlanDetailsScreen}
-        options={({ route }) => ({
-          title: route.params?.programName || 'Plan Details',
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        })}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="ActiveTraining" 
@@ -103,7 +126,7 @@ const MainNavigator = () => {
       
       <Tab.Screen
         name="Training"
-        component={TrainingScreen}
+        component={TrainingStack}
         options={{
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 

@@ -113,7 +113,7 @@ const CalendarScreen = ({ navigation }) => {
   const [filters, setFilters] = useState({
     eventTypes: [], // ['training', 'team', 'event']
     teams: [], // team IDs
-    dateRange: 'all', // 'all', 'today', 'week', 'month'
+    dateStart: 'today', // 'all', 'today', 'week', 'month'
   });
   const [assignments, setAssignments] = useState([]);
   const [events, setEvents] = useState([]);
@@ -214,25 +214,28 @@ const CalendarScreen = ({ navigation }) => {
       }
     }
 
-    // Filter by date range
-    if (filters.dateRange !== 'all') {
+    // Filter by date start (show events from selected date forward)
+    if (filters.dateStart !== 'all') {
       const eventDate = new Date(event.date);
       const todayDate = new Date(today.toDateString());
       
-      if (filters.dateRange === 'today') {
-        if (eventDate.toDateString() !== todayDate.toDateString()) {
+      if (filters.dateStart === 'today') {
+        // Show events from today forward
+        if (eventDate < todayDate) {
           return false;
         }
-      } else if (filters.dateRange === 'week') {
+      } else if (filters.dateStart === 'week') {
+        // Show events from 1 week from now forward
         const weekFromNow = new Date(todayDate);
         weekFromNow.setDate(weekFromNow.getDate() + 7);
-        if (eventDate < todayDate || eventDate > weekFromNow) {
+        if (eventDate < weekFromNow) {
           return false;
         }
-      } else if (filters.dateRange === 'month') {
+      } else if (filters.dateStart === 'month') {
+        // Show events from 1 month from now forward
         const monthFromNow = new Date(todayDate);
         monthFromNow.setMonth(monthFromNow.getMonth() + 1);
-        if (eventDate < todayDate || eventDate > monthFromNow) {
+        if (eventDate < monthFromNow) {
           return false;
         }
       }
@@ -272,19 +275,19 @@ const CalendarScreen = ({ navigation }) => {
     }));
   };
 
-  const setDateRangeFilter = (range) => {
-    setFilters(prev => ({ ...prev, dateRange: range }));
+  const setDateStartFilter = (start) => {
+    setFilters(prev => ({ ...prev, dateStart: start }));
   };
 
   const clearFilters = () => {
     setFilters({
       eventTypes: [],
       teams: [],
-      dateRange: 'all',
+      dateStart: 'today',
     });
   };
 
-  const hasActiveFilters = filters.eventTypes.length > 0 || filters.teams.length > 0 || filters.dateRange !== 'all';
+  const hasActiveFilters = filters.eventTypes.length > 0 || filters.teams.length > 0 || filters.dateStart !== 'today';
 
   // Get event type icon and color
   const getEventStyle = (type) => {
@@ -386,40 +389,40 @@ const CalendarScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Date Range Filters */}
+        {/* Date Start Filters */}
         <View style={styles.filterSection}>
-          <Text style={styles.filterSectionTitle}>Date Range</Text>
+          <Text style={styles.filterSectionTitle}>Date Start</Text>
           <View style={styles.filterChips}>
             <TouchableOpacity
-              style={[styles.filterChip, filters.dateRange === 'all' && styles.filterChipActive]}
-              onPress={() => setDateRangeFilter('all')}
+              style={[styles.filterChip, filters.dateStart === 'all' && styles.filterChipActive]}
+              onPress={() => setDateStartFilter('all')}
             >
-              <Text style={[styles.filterChipText, filters.dateRange === 'all' && styles.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, filters.dateStart === 'all' && styles.filterChipTextActive]}>
                 All
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterChip, filters.dateRange === 'today' && styles.filterChipActive]}
-              onPress={() => setDateRangeFilter('today')}
+              style={[styles.filterChip, filters.dateStart === 'today' && styles.filterChipActive]}
+              onPress={() => setDateStartFilter('today')}
             >
-              <Text style={[styles.filterChipText, filters.dateRange === 'today' && styles.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, filters.dateStart === 'today' && styles.filterChipTextActive]}>
                 Today
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterChip, filters.dateRange === 'week' && styles.filterChipActive]}
-              onPress={() => setDateRangeFilter('week')}
+              style={[styles.filterChip, filters.dateStart === 'week' && styles.filterChipActive]}
+              onPress={() => setDateStartFilter('week')}
             >
-              <Text style={[styles.filterChipText, filters.dateRange === 'week' && styles.filterChipTextActive]}>
-                This Week
+              <Text style={[styles.filterChipText, filters.dateStart === 'week' && styles.filterChipTextActive]}>
+                Next Week
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterChip, filters.dateRange === 'month' && styles.filterChipActive]}
-              onPress={() => setDateRangeFilter('month')}
+              style={[styles.filterChip, filters.dateStart === 'month' && styles.filterChipActive]}
+              onPress={() => setDateStartFilter('month')}
             >
-              <Text style={[styles.filterChipText, filters.dateRange === 'month' && styles.filterChipTextActive]}>
-                This Month
+              <Text style={[styles.filterChipText, filters.dateStart === 'month' && styles.filterChipTextActive]}>
+                Next Month
               </Text>
             </TouchableOpacity>
           </View>
@@ -574,7 +577,7 @@ const CalendarScreen = ({ navigation }) => {
               {hasActiveFilters && (
                 <View style={styles.filterBadge}>
                   <Text style={styles.filterBadgeText}>
-                    {filters.eventTypes.length + filters.teams.length + (filters.dateRange !== 'all' ? 1 : 0)}
+                    {filters.eventTypes.length + filters.teams.length + (filters.dateStart !== 'today' ? 1 : 0)}
                   </Text>
                 </View>
               )}

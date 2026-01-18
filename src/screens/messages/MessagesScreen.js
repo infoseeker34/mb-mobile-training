@@ -4,10 +4,13 @@
  * Communications center with inbox, notifications, and shared resources.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import notificationApi from '../../services/api/notificationApi';
+import InviteDetailModal from '../../components/InviteDetailModal';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -168,28 +171,142 @@ const MOCK_RESOURCES = [
 ];
 
 const MessagesScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('inbox');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('notifications');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Notifications state
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
+  
+  // Invite modal state
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [selectedInviteToken, setSelectedInviteToken] = useState(null);
 
-  // Filter data based on search
-  const filteredMessages = MOCK_MESSAGES.filter(msg =>
-    msg.from.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    msg.subject.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Fetch notifications on mount and when tab changes
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      fetchNotifications();
+    }
+  }, [user?.userId, activeTab, showAllNotifications]);
 
-  const filteredNotifications = MOCK_NOTIFICATIONS.filter(notif =>
+  const fetchNotifications = async (isRefresh = false) => {
+    if (!user?.userId) {
+      console.log('MessagesScreen - No userId, skipping fetch');
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setNotificationsLoading(true);
+      }
+      setNotificationsError(null);
+
+      console.log('MessagesScreen - Fetching notifications');
+      const result = await notificationApi.getNotifications({
+        unreadOnly: !showAllNotifications
+      });
+      console.log('MessagesScreen - Fetched notifications:', result);
+
+      setNotifications(result.notifications || []);
+      setUnreadCount(result.unreadCount || 0);
+    } catch (error) {
+      console.error('MessagesScreen - Error fetching notifications:', error);
+      setNotificationsError(error.message || 'Failed to load notifications');
+    } finally {
+      setNotificationsLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchNotifications(true);
+  };
+
+  const handleMarkAsRead = async (notificationId) => {
+    try {
+      await notificationApi.markAsRead(notificationId);
+      // Update local state
+      setNotifications(prev => prev.map(n => 
+        n.notification_id === notificationId ? { ...n, read: true } : n
+      ));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      Alert.alert('Error', 'Failed to mark notification as read');
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      Alert.alert('Error', 'Failed to mark all notifications as read');
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId) => {
+    try {
+      await notificationApi.deleteNotification(notificationId);
+      // Update local state
+      setNotifications(prev => prev.filter(n => n.notification_id !== notificationId));
+      if (!notifications.find(n => n.notification_id === notificationId)?.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      Alert.alert('Error', 'Failed to delete notification');
+    }
+  };
+
+  // Map backend notification type to icon
+  const getNotificationIcon = (type) => {
+    const iconMap = {
+      'celebration': '🎉',
+      'nudge': '👋',
+      'milestone': '🏆',
+      'achievement': '🏆',
+      'team': '⚽',
+      'assignment': '📋',
+      'system': '📋',
+      'training': '💪',
+      'level_up': '⭐',
+    };
+    return iconMap[type?.toLowerCase()] || '🔔';
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Filter notifications based on search
+  const filteredNotifications = notifications.filter(notif =>
     notif.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    notif.description.toLowerCase().includes(searchQuery.toLowerCase())
+    notif.message.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const filteredResources = MOCK_RESOURCES.filter(res =>
-    res.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    res.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const unreadMessagesCount = MOCK_MESSAGES.filter(m => m.unread).length;
-  const unreadNotificationsCount = MOCK_NOTIFICATIONS.filter(n => n.unread).length;
-  const pendingResourcesCount = MOCK_RESOURCES.filter(r => r.status === 'pending').length;
 
   const renderMessage = (message) => (
     <TouchableOpacity key={message.id} style={styles.messageCard}>
@@ -219,18 +336,71 @@ const MessagesScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  const handleNotificationTap = (notification) => {
+    // Mark as read if unread
+    if (!notification.read) {
+      handleMarkAsRead(notification.notification_id);
+    }
+
+    // Handle invitation notifications
+    if (notification.type === 'invitation_received' && notification.data) {
+      try {
+        const data = typeof notification.data === 'string' 
+          ? JSON.parse(notification.data) 
+          : notification.data;
+        
+        if (data.token) {
+          console.log('Opening invite modal for token:', data.token);
+          setSelectedInviteToken(data.token);
+          setInviteModalVisible(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error parsing notification data:', error);
+      }
+    }
+
+    // Handle other action URLs if needed
+    if (notification.action_url) {
+      console.log('Notification has action_url:', notification.action_url);
+      // Could navigate to other screens based on action_url
+    }
+  };
+
   const renderNotification = (notification) => (
-    <TouchableOpacity key={notification.id} style={styles.notificationCard}>
+    <TouchableOpacity 
+      key={notification.notification_id} 
+      style={styles.notificationCard}
+      onPress={() => handleNotificationTap(notification)}
+      onLongPress={() => {
+        Alert.alert(
+          'Notification Options',
+          'What would you like to do?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            !notification.read && {
+              text: 'Mark as Read',
+              onPress: () => handleMarkAsRead(notification.notification_id)
+            },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => handleDeleteNotification(notification.notification_id)
+            },
+          ].filter(Boolean)
+        );
+      }}
+    >
       <View style={styles.notificationIconContainer}>
-        <Text style={styles.notificationIcon}>{notification.icon}</Text>
-        {notification.unread && <View style={styles.unreadDot} />}
+        <Text style={styles.notificationIcon}>{getNotificationIcon(notification.type)}</Text>
+        {!notification.read && <View style={styles.unreadDot} />}
       </View>
       <View style={styles.notificationContent}>
-        <Text style={[styles.notificationTitle, notification.unread && styles.unreadText]}>
+        <Text style={[styles.notificationTitle, !notification.read && styles.unreadText]}>
           {notification.title}
         </Text>
-        <Text style={styles.notificationDescription}>{notification.description}</Text>
-        <Text style={styles.notificationTimestamp}>{notification.timestamp}</Text>
+        <Text style={styles.notificationDescription}>{notification.message}</Text>
+        <Text style={styles.notificationTimestamp}>{formatTimestamp(notification.created_at)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -278,46 +448,73 @@ const MessagesScreen = ({ navigation }) => {
   };
 
   const renderTabContent = () => {
-    if (activeTab === 'inbox') {
-      return (
-        <View>
-          {filteredMessages.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📭</Text>
-              <Text style={styles.emptyStateText}>No messages found</Text>
-            </View>
-          ) : (
-            filteredMessages.map(renderMessage)
-          )}
-        </View>
-      );
-    }
-
     if (activeTab === 'notifications') {
+      if (notificationsLoading && !refreshing) {
+        return (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Loading notifications...</Text>
+          </View>
+        );
+      }
+
+      if (notificationsError) {
+        return (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={48} color={Colors.error} />
+            <Text style={styles.errorText}>{notificationsError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => fetchNotifications()}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+
       return (
         <View>
+          {/* Filter Toggle */}
+          <View style={styles.filterContainer}>
+            <TouchableOpacity 
+              style={[styles.filterButton, !showAllNotifications && styles.filterButtonActive]}
+              onPress={() => setShowAllNotifications(false)}
+            >
+              <Text style={[styles.filterButtonText, !showAllNotifications && styles.filterButtonTextActive]}>
+                Unread ({unreadCount})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, showAllNotifications && styles.filterButtonActive]}
+              onPress={() => setShowAllNotifications(true)}
+            >
+              <Text style={[styles.filterButtonText, showAllNotifications && styles.filterButtonTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+            {unreadCount > 0 && (
+              <TouchableOpacity 
+                style={styles.markAllButton}
+                onPress={handleMarkAllAsRead}
+              >
+                <Ionicons name="checkmark-done" size={16} color={Colors.primary} />
+                <Text style={styles.markAllButtonText}>Mark all read</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {filteredNotifications.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateIcon}>🔔</Text>
-              <Text style={styles.emptyStateText}>No notifications</Text>
+              <Text style={styles.emptyStateText}>
+                {showAllNotifications ? 'No notifications' : 'No unread notifications'}
+              </Text>
+              {!showAllNotifications && notifications.length > 0 && (
+                <TouchableOpacity onPress={() => setShowAllNotifications(true)}>
+                  <Text style={styles.emptyStateLink}>View all notifications</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             filteredNotifications.map(renderNotification)
-          )}
-        </View>
-      );
-    }
-
-    if (activeTab === 'resources') {
-      return (
-        <View>
-          {filteredResources.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📂</Text>
-              <Text style={styles.emptyStateText}>No resources</Text>
-            </View>
-          ) : (
-            filteredResources.map(renderResource)
           )}
         </View>
       );
@@ -335,68 +532,18 @@ const MessagesScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Messages</Text>
         </View>
         
-        {/* Segmented Control */}
-        <View style={styles.segmentedControl}>
-          <TouchableOpacity
-            style={[styles.segment, activeTab === 'inbox' && styles.activeSegment]}
-            onPress={() => setActiveTab('inbox')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="mail" 
-              size={18} 
-              color={activeTab === 'inbox' ? Colors.white : Colors.textSecondary} 
-              style={styles.segmentIcon}
-            />
-            <Text style={[styles.segmentText, activeTab === 'inbox' && styles.activeSegmentText]}>
-              Inbox
-            </Text>
-            {unreadMessagesCount > 0 && (
+        {/* Tab Header - Only Notifications for Phase 1 */}
+        <View style={styles.tabHeader}>
+          <View style={styles.tabHeaderContent}>
+            <Ionicons name="notifications" size={24} color={Colors.white} />
+            <Text style={styles.tabHeaderTitle}>Notifications</Text>
+            {unreadCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadMessagesCount}</Text>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segment, activeTab === 'notifications' && styles.activeSegment]}
-            onPress={() => setActiveTab('notifications')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="notifications" 
-              size={18} 
-              color={activeTab === 'notifications' ? Colors.white : Colors.textSecondary} 
-              style={styles.segmentIcon}
-            />
-            <Text style={[styles.segmentText, activeTab === 'notifications' && styles.activeSegmentText]}>
-              Alerts
-            </Text>
-            {unreadNotificationsCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadNotificationsCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segment, activeTab === 'resources' && styles.activeSegment]}
-            onPress={() => setActiveTab('resources')}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name="folder" 
-              size={18} 
-              color={activeTab === 'resources' ? Colors.white : Colors.textSecondary} 
-              style={styles.segmentIcon}
-            />
-            <Text style={[styles.segmentText, activeTab === 'resources' && styles.activeSegmentText]}>
-              Files
-            </Text>
-            {pendingResourcesCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{pendingResourcesCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          </View>
+          <Text style={styles.tabHeaderSubtitle}>Stay updated on your training</Text>
         </View>
       </LinearGradient>
       
@@ -419,10 +566,35 @@ const MessagesScreen = ({ navigation }) => {
         </View>
 
         {/* Content */}
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
+        >
           {renderTabContent()}
         </ScrollView>
       </View>
+
+      {/* Invite Detail Modal */}
+      <InviteDetailModal
+        visible={inviteModalVisible}
+        onClose={() => {
+          setInviteModalVisible(false);
+          setSelectedInviteToken(null);
+        }}
+        invitationToken={selectedInviteToken}
+        onAccepted={() => {
+          // Refresh notifications after accepting/declining invite
+          fetchNotifications();
+        }}
+      />
     </View>
   );
 };
@@ -448,41 +620,25 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   
-  // Segmented Control
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  // Tab Header
+  tabHeader: {
     marginHorizontal: Layout.spacing.lg,
-    borderRadius: 12,
-    padding: 4,
+    marginTop: Layout.spacing.md,
   },
-  segment: {
-    flex: 1,
+  tabHeaderContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: 10,
+    marginBottom: Layout.spacing.xs,
   },
-  activeSegment: {
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  segmentIcon: {
-    marginRight: 4,
-  },
-  segmentText: {
-    fontSize: Layout.fontSize.xs,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '600',
-  },
-  activeSegmentText: {
+  tabHeaderTitle: {
+    fontSize: Layout.fontSize.xl,
+    fontWeight: 'bold',
     color: Colors.white,
+    marginLeft: Layout.spacing.sm,
+  },
+  tabHeaderSubtitle: {
+    fontSize: Layout.fontSize.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   
   // Content Wrapper
@@ -726,6 +882,85 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   
+  // Filter Container
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Layout.spacing.lg,
+    marginBottom: Layout.spacing.md,
+    gap: Layout.spacing.sm,
+  },
+  filterButton: {
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    backgroundColor: Colors.surface,
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterButtonText: {
+    fontSize: Layout.fontSize.sm,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  filterButtonTextActive: {
+    color: Colors.white,
+  },
+  markAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    backgroundColor: Colors.surface,
+    gap: 4,
+  },
+  markAllButtonText: {
+    fontSize: Layout.fontSize.xs,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  
+  // Loading State
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.xxxl,
+  },
+  loadingText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.md,
+  },
+  
+  // Error State
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.xxxl,
+    paddingHorizontal: Layout.spacing.lg,
+  },
+  errorText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.error,
+    textAlign: 'center',
+    marginTop: Layout.spacing.md,
+    marginBottom: Layout.spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Layout.spacing.md,
+    paddingHorizontal: Layout.spacing.xl,
+    borderRadius: Layout.borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+  
   // Empty State
   emptyState: {
     alignItems: 'center',
@@ -740,6 +975,13 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.lg,
     fontWeight: '600',
     color: Colors.textSecondary,
+    marginBottom: Layout.spacing.sm,
+  },
+  emptyStateLink: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginTop: Layout.spacing.sm,
   },
   
   bottomPadding: {

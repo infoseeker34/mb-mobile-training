@@ -56,12 +56,17 @@ const planApi = {
   },
 
   /**
-   * Browse public training plans
+   * Browse training plans from library
    * @param {object} params - Query parameters
    * @param {string} params.sportCategory - Filter by sport category
-   * @param {string} params.difficulty - Filter by difficulty
-   * @param {string} params.search - Search query
-   * @returns {Promise<Array>} Array of programs
+   * @param {string} params.difficulty - Filter by difficulty (easy, medium, hard, elite)
+   * @param {string} params.searchQuery - Search query
+   * @param {string} params.visibility - Filter by visibility (public, team, organization, private)
+   * @param {string} params.sortBy - Sort by (rating, saves, recent, popular, name)
+   * @param {string} params.sortOrder - Sort order (asc, desc)
+   * @param {number} params.limit - Number of results (default: 20)
+   * @param {number} params.offset - Offset for pagination (default: 0)
+   * @returns {Promise<object>} Object with plans array and total count
    */
   async browsePrograms(params = {}) {
     try {
@@ -69,18 +74,34 @@ const planApi = {
       
       const queryParams = new URLSearchParams();
       
+      // Add all supported filter parameters
       if (params.sportCategory) {
         queryParams.append('sportCategory', params.sportCategory);
       }
       if (params.difficulty) {
         queryParams.append('difficulty', params.difficulty);
       }
-      if (params.search) {
-        queryParams.append('search', params.search);
+      if (params.searchQuery) {
+        queryParams.append('searchQuery', params.searchQuery);
+      }
+      if (params.visibility) {
+        queryParams.append('visibility', params.visibility);
+      }
+      if (params.sortBy) {
+        queryParams.append('sortBy', params.sortBy);
+      }
+      if (params.sortOrder) {
+        queryParams.append('sortOrder', params.sortOrder);
+      }
+      if (params.limit !== undefined) {
+        queryParams.append('limit', params.limit.toString());
+      }
+      if (params.offset !== undefined) {
+        queryParams.append('offset', params.offset.toString());
       }
 
       const queryString = queryParams.toString();
-      const url = `/api/gamification/programs${queryString ? `?${queryString}` : ''}`;
+      const url = `/api/gamification/plans/library${queryString ? `?${queryString}` : ''}`;
       console.log('planApi - Full URL:', url);
       
       const response = await apiClient.get(url);
@@ -88,7 +109,7 @@ const planApi = {
       console.log('planApi - Response data:', response.data);
       
       if (response.data.status === 'success') {
-        return response.data.data.programs;
+        return response.data.data; // Returns { plans: [], total: number }
       } else {
         throw new Error(response.data.message || 'Failed to fetch programs');
       }

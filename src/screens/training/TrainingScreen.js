@@ -4,10 +4,14 @@
  * Main training hub with tabs for browsing plans, viewing history, and tracking progress.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import planApi from '../../services/api/planApi';
+import sessionApi from '../../services/api/sessionApi';
+import progressApi from '../../services/api/progressApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -138,19 +142,186 @@ const MOCK_STATS = {
 };
 
 const TrainingScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('browse');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Browse tab state
+  const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState(null);
+  const [plansTotal, setPlansTotal] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // History tab state
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  
+  // Progress tab state
+  const [progressData, setProgressData] = useState(null);
+  const [streakData, setStreakData] = useState(null);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressError, setProgressError] = useState(null);
 
-  // Filter plans based on search
-  const filteredPlans = MOCK_PLANS.filter(plan =>
-    plan.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Fetch plans from API
+  const fetchPlans = async (isRefresh = false) => {
+    if (!user?.userId) {
+      console.log('TrainingScreen - No userId, skipping fetch');
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setPlansLoading(true);
+      }
+      setPlansError(null);
+
+      const params = {
+        visibility: 'public', // Show public plans for browsing
+        sortBy: 'recent',
+        sortOrder: 'desc',
+        limit: 50,
+      };
+
+      // Add search query if present
+      if (searchQuery.trim()) {
+        params.searchQuery = searchQuery.trim();
+      }
+
+      console.log('TrainingScreen - Fetching plans with params:', params);
+      const result = await planApi.browsePrograms(params);
+      console.log('TrainingScreen - Fetched plans:', result);
+
+      setPlans(result.plans || []);
+      setPlansTotal(result.total || 0);
+    } catch (error) {
+      console.error('TrainingScreen - Error fetching plans:', error);
+      setPlansError(error.message || 'Failed to load training plans');
+    } finally {
+      setPlansLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Load plans on mount and when search changes
+  useEffect(() => {
+    if (activeTab === 'browse') {
+      fetchPlans();
+    } else if (activeTab === 'history') {
+      fetchHistory();
+    } else if (activeTab === 'progress') {
+      fetchProgress();
+    }
+  }, [user?.userId, activeTab]);
+
+  // Debounced search
+  useEffect(() => {
+    if (activeTab === 'browse') {
+      const timeoutId = setTimeout(() => {
+        fetchPlans();
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery]);
+
+  // Handle refresh
+  const handleRefresh = () => {
+    if (activeTab === 'browse') {
+      fetchPlans(true);
+    } else if (activeTab === 'history') {
+      fetchHistory(true);
+    } else if (activeTab === 'progress') {
+      fetchProgress(true);
+    }
+  };
+
+  const fetchHistory = async (isRefresh = false) => {
+    if (!user?.userId) {
+      console.log('TrainingScreen - No userId, skipping history fetch');
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setHistoryLoading(true);
+      }
+      setHistoryError(null);
+
+      console.log('TrainingScreen - Fetching session history');
+      const result = await sessionApi.getSessionHistory({
+        limit: 50,
+        offset: 0,
+      });
+      console.log('TrainingScreen - Fetched history:', result);
+
+      setHistory(result.sessions || []);
+    } catch (error) {
+      console.error('TrainingScreen - Error fetching history:', error);
+      setHistoryError(error.message || 'Failed to load session history');
+    } finally {
+      setHistoryLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchProgress = async (isRefresh = false) => {
+    if (!user?.userId) {
+      console.log('TrainingScreen - No userId, skipping progress fetch');
+      return;
+    }
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setProgressLoading(true);
+      }
+      setProgressError(null);
+
+      console.log('TrainingScreen - Fetching progress data');
+      const [progress, streak] = await Promise.all([
+        progressApi.getPlayerProgress(),
+        progressApi.getStreakData().catch(() => ({ currentStreak: 0, longestStreak: 0 }))
+      ]);
+      
+      console.log('TrainingScreen - Fetched progress:', progress);
+      console.log('TrainingScreen - Fetched streak:', streak);
+
+      setProgressData(progress);
+      setStreakData(streak);
+    } catch (error) {
+      console.error('TrainingScreen - Error fetching progress:', error);
+      setProgressError(error.message || 'Failed to load progress data');
+    } finally {
+      setProgressLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Map API data to UI format
+  const mapPlanToUI = (plan) => ({
+    id: plan.programId,
+    name: plan.name,
+    category: plan.sportCategory,
+    difficulty: plan.difficulty.charAt(0).toUpperCase() + plan.difficulty.slice(1),
+    duration: plan.estimatedDuration,
+    sessions: plan.timesCompleted || 0,
+    description: plan.description || 'No description available',
+    exercises: 0, // Not available in API response
+    equipment: '', // Not available in API response
+  });
+
+  // Filter plans based on search (client-side for now)
+  const filteredPlans = plans.map(mapPlanToUI);
 
   // Filter history based on search
-  const filteredHistory = MOCK_HISTORY.filter(session =>
-    session.planName.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredHistory = history.filter(session =>
+    (session.programName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const renderSearchBar = () => {
@@ -238,26 +409,56 @@ const TrainingScreen = ({ navigation }) => {
   );
 
   const renderBrowsePlans = () => (
-    <ScrollView style={styles.content}>
+    <ScrollView 
+      style={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={Colors.primary}
+          colors={[Colors.primary]}
+        />
+      }
+    >
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Discover Training Plans</Text>
         <Text style={styles.sectionSubtitle}>
-          Browse and explore training plans to improve your skills
+          {plansTotal > 0 ? `${plansTotal} plans available` : 'Browse and explore training plans'}
         </Text>
       </View>
 
-      {filteredPlans.length === 0 ? (
+      {plansLoading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading plans...</Text>
+        </View>
+      ) : plansError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={Colors.error} />
+          <Text style={styles.errorText}>{plansError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchPlans()}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : filteredPlans.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateIcon}>🔍</Text>
           <Text style={styles.emptyStateText}>No plans found</Text>
-          <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
+          <Text style={styles.emptyStateSubtext}>
+            {searchQuery ? 'Try a different search term' : 'Check back later for new plans'}
+          </Text>
         </View>
       ) : (
         filteredPlans.map((plan) => (
         <TouchableOpacity
           key={plan.id}
           style={styles.planCard}
-          onPress={() => {}}
+          onPress={() => {
+            navigation.navigate('PlanDetails', {
+              programId: plan.id,
+              programName: plan.name,
+            });
+          }}
         >
           <View style={styles.planHeader}>
             <View style={styles.planTitleRow}>
@@ -292,11 +493,23 @@ const TrainingScreen = ({ navigation }) => {
         </TouchableOpacity>
         ))
       )}
+      
+      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 
   const renderHistory = () => (
-    <ScrollView style={styles.content}>
+    <ScrollView 
+      style={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={Colors.primary}
+          colors={[Colors.primary]}
+        />
+      }
+    >
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Training History</Text>
         <Text style={styles.sectionSubtitle}>
@@ -304,29 +517,44 @@ const TrainingScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      {filteredHistory.length === 0 ? (
+      {historyLoading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading history...</Text>
+        </View>
+      ) : historyError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={Colors.error} />
+          <Text style={styles.errorText}>{historyError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchHistory()}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : filteredHistory.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateIcon}>🔍</Text>
+          <Text style={styles.emptyStateIcon}>📋</Text>
           <Text style={styles.emptyStateText}>No sessions found</Text>
-          <Text style={styles.emptyStateSubtext}>Try a different search term</Text>
+          <Text style={styles.emptyStateSubtext}>
+            {searchQuery ? 'Try a different search term' : 'Complete a training session to see it here'}
+          </Text>
         </View>
       ) : (
         filteredHistory.map((session) => (
         <TouchableOpacity
-          key={session.id}
+          key={session.sessionId}
           style={styles.historyCard}
           onPress={() => {}}
         >
           <View style={styles.historyHeader}>
             <View style={styles.historyIcon}>
               <Text style={styles.historyIconText}>
-                {session.completed ? '✅' : '⚠️'}
+                {session.status === 'completed' ? '✅' : '⚠️'}
               </Text>
             </View>
             <View style={styles.historyContent}>
-              <Text style={styles.historyPlanName}>{session.planName}</Text>
+              <Text style={styles.historyPlanName}>{session.programName || 'Unknown Program'}</Text>
               <Text style={styles.historyDate}>
-                {new Date(session.date).toLocaleDateString('en-US', {
+                {new Date(session.completedAt || session.startedAt).toLocaleDateString('en-US', {
                   weekday: 'short',
                   month: 'short',
                   day: 'numeric'
@@ -338,25 +566,61 @@ const TrainingScreen = ({ navigation }) => {
           <View style={styles.historyStats}>
             <View style={styles.historyStat}>
               <Text style={styles.historyStatLabel}>Duration</Text>
-              <Text style={styles.historyStatValue}>{session.duration} min</Text>
+              <Text style={styles.historyStatValue}>{session.durationMinutes || 0} min</Text>
             </View>
             <View style={styles.historyStat}>
               <Text style={styles.historyStatLabel}>Completion</Text>
-              <Text style={styles.historyStatValue}>{session.completionRate}%</Text>
+              <Text style={styles.historyStatValue}>{session.completionPercentage || 0}%</Text>
             </View>
             <View style={styles.historyStat}>
               <Text style={styles.historyStatLabel}>XP Earned</Text>
-              <Text style={styles.historyStatValue}>+{session.xpEarned}</Text>
+              <Text style={styles.historyStatValue}>+{session.xpEarned || 0}</Text>
             </View>
           </View>
         </TouchableOpacity>
         ))
       )}
+      
+      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 
-  const renderProgress = () => (
-    <ScrollView style={styles.content}>
+  const renderProgress = () => {
+    // Calculate period stats from history
+    const calculatePeriodStats = (days) => {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      const periodSessions = history.filter(session => {
+        const sessionDate = new Date(session.completedAt || session.startedAt);
+        return sessionDate >= cutoffDate;
+      });
+      
+      return {
+        sessions: periodSessions.length,
+        xp: periodSessions.reduce((sum, s) => sum + (s.xpEarned || 0), 0),
+        minutes: periodSessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0)
+      };
+    };
+    
+    const thisWeek = calculatePeriodStats(7);
+    const thisMonth = calculatePeriodStats(30);
+    const averageDuration = progressData?.totalSessionsCompleted > 0
+      ? Math.round(progressData.totalTrainingTime / progressData.totalSessionsCompleted)
+      : 0;
+    
+    return (
+    <ScrollView 
+      style={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={Colors.primary}
+          colors={[Colors.primary]}
+        />
+      }
+    >
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your Progress</Text>
         <Text style={styles.sectionSubtitle}>
@@ -364,22 +628,37 @@ const TrainingScreen = ({ navigation }) => {
         </Text>
       </View>
 
+      {progressLoading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading progress...</Text>
+        </View>
+      ) : progressError ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={Colors.error} />
+          <Text style={styles.errorText}>{progressError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchProgress()}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
       {/* Overall Stats */}
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{MOCK_STATS.totalSessions}</Text>
+          <Text style={styles.statValue}>{progressData?.totalSessionsCompleted || 0}</Text>
           <Text style={styles.statLabel}>Total Sessions</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{MOCK_STATS.totalXP}</Text>
+          <Text style={styles.statValue}>{progressData?.totalXP || 0}</Text>
           <Text style={styles.statLabel}>Total XP</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{MOCK_STATS.currentStreak}</Text>
+          <Text style={styles.statValue}>{streakData?.currentStreak || 0}</Text>
           <Text style={styles.statLabel}>Current Streak</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{MOCK_STATS.averageDuration}</Text>
+          <Text style={styles.statValue}>{averageDuration}</Text>
           <Text style={styles.statLabel}>Avg Minutes</Text>
         </View>
       </View>
@@ -391,21 +670,21 @@ const TrainingScreen = ({ navigation }) => {
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>📅</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisWeek.sessions}</Text>
+              <Text style={styles.periodStatValue}>{thisWeek.sessions}</Text>
               <Text style={styles.periodStatLabel}>Sessions</Text>
             </View>
           </View>
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>⚡</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisWeek.xp}</Text>
+              <Text style={styles.periodStatValue}>{thisWeek.xp}</Text>
               <Text style={styles.periodStatLabel}>XP Earned</Text>
             </View>
           </View>
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>⏱️</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisWeek.minutes}</Text>
+              <Text style={styles.periodStatValue}>{thisWeek.minutes}</Text>
               <Text style={styles.periodStatLabel}>Minutes</Text>
             </View>
           </View>
@@ -419,44 +698,53 @@ const TrainingScreen = ({ navigation }) => {
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>📅</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisMonth.sessions}</Text>
+              <Text style={styles.periodStatValue}>{thisMonth.sessions}</Text>
               <Text style={styles.periodStatLabel}>Sessions</Text>
             </View>
           </View>
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>⚡</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisMonth.xp}</Text>
+              <Text style={styles.periodStatValue}>{thisMonth.xp}</Text>
               <Text style={styles.periodStatLabel}>XP Earned</Text>
             </View>
           </View>
           <View style={styles.periodStat}>
             <Text style={styles.periodStatIcon}>⏱️</Text>
             <View>
-              <Text style={styles.periodStatValue}>{MOCK_STATS.thisMonth.minutes}</Text>
+              <Text style={styles.periodStatValue}>{thisMonth.minutes}</Text>
               <Text style={styles.periodStatLabel}>Minutes</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Completion Rate */}
+      {/* Level Info */}
       <View style={styles.completionCard}>
-        <Text style={styles.completionTitle}>Completion Rate</Text>
+        <Text style={styles.completionTitle}>Level Progress</Text>
+        <View style={styles.levelInfo}>
+          <Text style={styles.levelText}>Level {progressData?.currentLevel || 1}</Text>
+          <Text style={styles.tierText}>{progressData?.tierName || 'Beginner'}</Text>
+        </View>
         <View style={styles.completionBar}>
           <View
             style={[
               styles.completionFill,
-              { width: `${(MOCK_STATS.completedSessions / MOCK_STATS.totalSessions) * 100}%` }
+              { width: `${progressData?.xpToNextLevel ? ((progressData.totalXP % 100) / progressData.xpToNextLevel * 100) : 0}%` }
             ]}
           />
         </View>
         <Text style={styles.completionText}>
-          {MOCK_STATS.completedSessions} of {MOCK_STATS.totalSessions} sessions completed
+          {progressData?.totalXP || 0} XP • {progressData?.xpToNextLevel || 100} to next level
         </Text>
       </View>
+      </>
+      )}
+      
+      <View style={styles.bottomPadding} />
     </ScrollView>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -514,6 +802,44 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: Layout.spacing.xs,
+  },
+  
+  // Loading State
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.xxxl,
+  },
+  loadingText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.md,
+  },
+  
+  // Error State
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.xxxl,
+    paddingHorizontal: Layout.spacing.lg,
+  },
+  errorText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.error,
+    textAlign: 'center',
+    marginTop: Layout.spacing.md,
+    marginBottom: Layout.spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.white,
   },
   
   // Empty State
@@ -872,6 +1198,27 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.sm,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  levelInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.md,
+  },
+  levelText: {
+    fontSize: Layout.fontSize.xl,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  tierText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  
+  // Bottom Padding
+  bottomPadding: {
+    height: Layout.spacing.xl,
   },
 });
 

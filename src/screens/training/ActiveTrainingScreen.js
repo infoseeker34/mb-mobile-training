@@ -38,7 +38,8 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   const [hasPlayed30sWarning, setHasPlayed30sWarning] = useState(false);
   const [lastBeepSecond, setLastBeepSecond] = useState(-1);
   const [sessionId, setSessionId] = useState(null);
-  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [totalTrainingTime, setTotalTrainingTime] = useState(0); // Accumulated time in seconds
+  const [taskStartTime, setTaskStartTime] = useState(null);
   
   // Audio players using expo-audio
   const player30s = useAudioPlayer(require('../../assets/sounds/beep.mp3'));
@@ -62,6 +63,8 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     setLastBeepSecond(-1);
     setTimerPaused(false);
     setVideoKey(prev => prev + 1); // Force video reload
+    // Reset task start time for new task
+    setTaskStartTime(null);
   }, [currentTaskIndex]);
 
   // Start session when component mounts
@@ -155,10 +158,12 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   };
 
   const startTimer = () => {
-    if (currentTask?.timeTarget) {
+    if (currentTask) {
       setTimeRemaining(currentTask.timeTarget * 60); // Convert minutes to seconds
       setTimerActive(true);
       setTimerPaused(false);
+      // Track when this task actually starts
+      setTaskStartTime(new Date());
     }
   };
 
@@ -170,27 +175,42 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSkip = () => {
+  const handleSkipTask = () => {
+    // Add time spent on this task (even if skipped) to total
+    if (taskStartTime) {
+      const taskEndTime = new Date();
+      const taskDuration = Math.floor((taskEndTime - taskStartTime) / 1000); // seconds
+      setTotalTrainingTime(prev => prev + taskDuration);
+    }
+    
     setSkippedTasks([...skippedTasks, currentTask.taskId]);
     setTimerActive(false);
-    setTimeRemaining(0);
     
-    if (isLastTask) {
-      setCurrentTaskIndex(tasks.length);
-    } else {
+    if (!isLastTask) {
       setCurrentTaskIndex(currentTaskIndex + 1);
+    } else {
+      setCurrentTaskIndex(currentTaskIndex + 1); // Triggers completion
     }
   };
 
-  const handleFinish = () => {
-    setCompletedTasks([...completedTasks, currentTask.taskId]);
-    setTimerActive(false);
-    setTimeRemaining(0);
+  const handleTaskComplete = () => {
+    // Add time spent on this task to total
+    if (taskStartTime) {
+      const taskEndTime = new Date();
+      const taskDuration = Math.floor((taskEndTime - taskStartTime) / 1000); // seconds
+      setTotalTrainingTime(prev => prev + taskDuration);
+    }
     
-    if (isLastTask) {
-      setCurrentTaskIndex(tasks.length);
-    } else {
+    setCompletedTasks([...completedTasks, currentTask.taskId]);
+    playerComplete.seekTo(0);
+    playerComplete.play();
+    setTimerActive(false);
+    
+    // Move to next task or finish
+    if (!isLastTask) {
       setCurrentTaskIndex(currentTaskIndex + 1);
+    } else {
+      setCurrentTaskIndex(currentTaskIndex + 1); // Triggers completion
     }
   };
 
@@ -212,7 +232,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
       
       if (response.data.status === 'success') {
         setSessionId(response.data.data.session.sessionId);
-        setSessionStartTime(new Date());
+        setTotalTrainingTime(0);
         console.log('✅ Training session started:', response.data.data.session.sessionId);
       }
     } catch (error) {
@@ -224,7 +244,8 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
         if (activeSession.programId === planData.programId) {
           console.log('♻️ Reusing existing session for same program:', activeSession.sessionId);
           setSessionId(activeSession.sessionId);
-          setSessionStartTime(new Date(activeSession.startedAt));
+          // Reset training time accumulator for resumed session
+          setTotalTrainingTime(0);
         } else {
           // Different program - abandon the old session and start new one
           console.log('🔄 Abandoning old session for different program');
@@ -240,7 +261,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
             });
             if (retryResponse.data.status === 'success') {
               setSessionId(retryResponse.data.data.session.sessionId);
-              setSessionStartTime(new Date());
+              setTotalTrainingTime(0);
               console.log('✅ New training session started:', retryResponse.data.data.session.sessionId);
             }
           } catch (abandonError) {
@@ -260,10 +281,9 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
         return;
       }
 
-      const endTime = new Date();
-      const totalTime = sessionStartTime 
-        ? Math.floor((endTime - sessionStartTime) / 1000 / 60) // minutes
-        : planData.estimatedDurationMinutes || 30;
+      // Convert accumulated seconds to minutes
+      const totalTime = Math.ceil(totalTrainingTime / 60) || 1; // At least 1 minute
+      console.log(`Total training time: ${totalTime} minutes (${totalTrainingTime} seconds)`);
 
       // Build performance data for each task
       const performanceData = tasks.map(task => ({
@@ -281,13 +301,15 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
         difficulty: planData.difficulty || 'medium'
       };
 
+      console.log('Completing session with data:', completionData);
+
       const response = await apiClient.post(
         `/api/gamification/sessions/${sessionId}/complete`,
         completionData
       );
       
       if (response.data.status === 'success') {
-        console.log('Training session completed:', response.data.data);
+        console.log('Training session completed successfully:', response.data.data);
       }
     } catch (error) {
       console.error('Error completing training session:', error);

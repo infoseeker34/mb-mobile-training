@@ -14,12 +14,16 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   Dimensions,
-  Linking
+  Linking,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { useAuth } from '../../contexts/AuthContext';
 import planApi from '../../services/api/planApi';
+import assignmentApi from '../../services/api/assignmentApi';
+import AssignmentModal from '../../components/AssignmentModal';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -28,15 +32,25 @@ const VIDEO_HEIGHT = SCREEN_WIDTH * 0.5625; // 16:9 aspect ratio
 
 const PlanDetailsScreen = ({ route, navigation }) => {
   const { assignmentId, programId, programName } = route.params;
+  const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [planData, setPlanData] = useState(null);
   const [expandedSections, setExpandedSections] = useState({});
+  
+  // Assignment state
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [currentAssignment, setCurrentAssignment] = useState(null);
+  const [assignmentType, setAssignmentType] = useState(null); // 'personal' | 'team' | null
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
 
   useEffect(() => {
     fetchPlanDetails();
-  }, [programId]);
+    if (user?.userId) {
+      checkAssignmentStatus();
+    }
+  }, [programId, user?.userId]);
 
   const fetchPlanDetails = async () => {
     try {
@@ -53,6 +67,61 @@ const PlanDetailsScreen = ({ route, navigation }) => {
       console.error('Error fetching plan details:', err);
       setError(err.message || 'Failed to load plan details');
       setLoading(false);
+    }
+  };
+
+  const checkAssignmentStatus = async () => {
+    if (!user?.userId || !programId) return;
+    
+    try {
+      setAssignmentLoading(true);
+      
+      // Check if this program is assigned to the user
+      const result = await assignmentApi.checkProgramAssignment(user.userId, programId);
+      
+      console.log('Assignment check result:', result);
+      
+      if (result.isAssigned) {
+        setCurrentAssignment(result.assignment);
+        setAssignmentType(result.assignmentType);
+      } else {
+        setCurrentAssignment(null);
+        setAssignmentType(null);
+      }
+    } catch (err) {
+      console.error('Error checking assignment status:', err);
+      // Don't show error to user, just log it
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
+
+  const handleSaveAssignment = async (assignmentData) => {
+    if (!user?.userId) {
+      Alert.alert('Error', 'You must be logged in to create assignments');
+      return;
+    }
+
+    try {
+      if (currentAssignment && assignmentType === 'personal') {
+        // Update existing personal assignment
+        await assignmentApi.updateAssignment(currentAssignment.assignmentId, assignmentData);
+        Alert.alert('Success', 'Training schedule updated successfully');
+      } else {
+        // Create new personal assignment
+        const newAssignment = await assignmentApi.createAssignment({
+          ...assignmentData,
+          programId,
+          assignedToUser: user.userId,
+        });
+        Alert.alert('Success', 'Training plan added to your schedule');
+      }
+      
+      // Refresh assignment status
+      await checkAssignmentStatus();
+    } catch (error) {
+      console.error('Error saving assignment:', error);
+      throw error; // Let modal handle the error display
     }
   };
 
@@ -229,7 +298,7 @@ const PlanDetailsScreen = ({ route, navigation }) => {
   if (!planData) return null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -241,6 +310,12 @@ const PlanDetailsScreen = ({ route, navigation }) => {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {planData.name}
           </Text>
+          {assignmentType && (
+            <View style={styles.scheduledBadge}>
+              <Ionicons name="calendar" size={12} color={Colors.primary} />
+              <Text style={styles.scheduledBadgeText}>Scheduled</Text>
+            </View>
+          )}
         </View>
         <View style={styles.headerRight} />
       </View>
@@ -297,14 +372,84 @@ const PlanDetailsScreen = ({ route, navigation }) => {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.startButton}
-          onPress={() => navigation.navigate('ActiveTraining', { planData, assignmentId })}
-        >
-          <Ionicons name="play" size={20} color={Colors.white} style={{ marginRight: 8 }} />
-          <Text style={styles.startButtonText}>Start Training</Text>
-        </TouchableOpacity>
+        {assignmentType === 'team' ? (
+          // Team assignment: Only Start Training button
+          <View style={styles.footerButtons}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryButton]}
+              onPress={() => navigation.navigate('ActiveTraining', { 
+                planData, 
+                assignmentId: currentAssignment?.assignmentId 
+              })}
+            >
+              <Ionicons name="play" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+              <Text style={styles.actionButtonText}>Start Training</Text>
+            </TouchableOpacity>
+          </View>
+        ) : assignmentType === 'personal' ? (
+          // Personal assignment: Start Training + Edit Assignment buttons
+          <View style={styles.footerButtons}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.secondaryButton]}
+              onPress={() => setShowAssignmentModal(true)}
+            >
+              <Ionicons name="create-outline" size={20} color={Colors.primary} />
+              <Text style={styles.secondaryButtonText}>Update</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryButton, { flex: 2 }]}
+              onPress={() => navigation.navigate('ActiveTraining', { 
+                planData, 
+                assignmentId: currentAssignment?.assignmentId 
+              })}
+            >
+              <Ionicons name="play" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+              <Text style={styles.actionButtonText}>Start Training</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // No assignment: Start Training + Create Assignment buttons
+          <View style={styles.footerButtons}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.secondaryButton]}
+              onPress={() => setShowAssignmentModal(true)}
+            >
+              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              <Text style={styles.secondaryButtonText}>Add</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryButton, { flex: 2 }]}
+              onPress={() => navigation.navigate('ActiveTraining', { planData, assignmentId: null })}
+            >
+              <Ionicons name="play" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+              <Text style={styles.actionButtonText}>Start Training</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {assignmentType && (
+          <View style={styles.assignmentInfo}>
+            <Ionicons 
+              name={assignmentType === 'team' ? 'people' : 'person'} 
+              size={14} 
+              color={Colors.textSecondary} 
+            />
+            <Text style={styles.assignmentInfoText}>
+              {assignmentType === 'team' ? 'Team Assignment' : 'Personal Assignment'}
+              {currentAssignment?.teamName && ` • ${currentAssignment.teamName}`}
+            </Text>
+          </View>
+        )}
       </View>
+
+      <AssignmentModal
+        visible={showAssignmentModal}
+        onClose={() => setShowAssignmentModal(false)}
+        onSave={handleSaveAssignment}
+        assignment={assignmentType === 'personal' ? currentAssignment : null}
+        programName={planData.name}
+        isEditing={assignmentType === 'personal'}
+      />
     </SafeAreaView>
   );
 };
@@ -332,13 +477,24 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
-    marginHorizontal: Layout.spacing.sm,
+    marginHorizontal: Layout.spacing.md,
   },
   headerTitle: {
     fontSize: Layout.fontSize.lg,
     fontWeight: '600',
     color: Colors.text,
     textAlign: 'center',
+  },
+  scheduledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  scheduledBadgeText: {
+    fontSize: Layout.fontSize.xs,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   headerRight: {
     width: 40,
@@ -568,23 +724,57 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  startButton: {
+  footerButtons: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
     paddingVertical: Layout.spacing.md,
     borderRadius: Layout.borderRadius.lg,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  startButtonText: {
+  primaryButton: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+  },
+  secondaryButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  actionButtonText: {
     fontSize: Layout.fontSize.lg,
     fontWeight: 'bold',
     color: Colors.white,
+  },
+  secondaryButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 6,
+  },
+  assignmentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Layout.spacing.sm,
+    paddingTop: Layout.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: 6,
+  },
+  assignmentInfoText: {
+    fontSize: Layout.fontSize.xs,
+    color: Colors.textSecondary,
   },
   
   // Loading & Error States
