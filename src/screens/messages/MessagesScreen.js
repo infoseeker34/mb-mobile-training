@@ -5,11 +5,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Alert, FlatList } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import notificationApi from '../../services/api/notificationApi';
+import messageApi from '../../services/api/messageApi';
+import teamApi from '../../services/api/teamApi';
 import InviteDetailModal from '../../components/InviteDetailModal';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
@@ -172,8 +174,12 @@ const MOCK_RESOURCES = [
 
 const MessagesScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('notifications');
+  const [activeTab, setActiveTab] = useState('teams');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Teams state
+  const [teams, setTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
   
   // Notifications state
   const [notifications, setNotifications] = useState([]);
@@ -187,12 +193,26 @@ const MessagesScreen = ({ navigation }) => {
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [selectedInviteToken, setSelectedInviteToken] = useState(null);
 
-  // Fetch notifications on mount and when tab changes
+  // Fetch data on mount and when tab changes
   useEffect(() => {
-    if (activeTab === 'notifications') {
+    if (activeTab === 'teams') {
+      fetchTeams();
+    } else if (activeTab === 'notifications') {
       fetchNotifications();
     }
   }, [user?.userId, activeTab, showAllNotifications]);
+
+  const fetchTeams = async () => {
+    try {
+      setTeamsLoading(true);
+      const response = await teamApi.getTeams();
+      setTeams(response.teams || []);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    } finally {
+      setTeamsLoading(false);
+    }
+  };
 
   const fetchNotifications = async (isRefresh = false) => {
     if (!user?.userId) {
@@ -447,7 +467,46 @@ const MessagesScreen = ({ navigation }) => {
     );
   };
 
+  const renderTeamCard = ({ item }) => (
+    <TouchableOpacity
+      style={styles.teamCard}
+      onPress={() => navigation.navigate('TeamMessages', {
+        teamId: item.id,
+        teamName: item.name
+      })}
+    >
+      <View style={styles.teamIconContainer}>
+        <Text style={styles.teamIcon}>{item.sport === 'soccer' ? '⚽' : '🏀'}</Text>
+      </View>
+      <View style={styles.teamInfo}>
+        <Text style={styles.teamName}>{item.name}</Text>
+        <Text style={styles.teamSport}>{item.sport || 'Sport'}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+    </TouchableOpacity>
+  );
+
   const renderTabContent = () => {
+    if (activeTab === 'organizations') {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateIcon}>🏢</Text>
+          <Text style={styles.emptyStateText}>Organization Messages</Text>
+          <Text style={styles.emptyStateSubtext}>Coming soon!</Text>
+        </View>
+      );
+    }
+
+    if (activeTab === 'direct') {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateIcon}>✉️</Text>
+          <Text style={styles.emptyStateText}>Direct Messages</Text>
+          <Text style={styles.emptyStateSubtext}>Coming soon!</Text>
+        </View>
+      );
+    }
+
     if (activeTab === 'notifications') {
       if (notificationsLoading && !refreshing) {
         return (
@@ -514,7 +573,9 @@ const MessagesScreen = ({ navigation }) => {
               )}
             </View>
           ) : (
-            filteredNotifications.map(renderNotification)
+            <View>
+              {filteredNotifications.map(renderNotification)}
+            </View>
           )}
         </View>
       );
@@ -532,18 +593,41 @@ const MessagesScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Messages</Text>
         </View>
         
-        {/* Tab Header - Only Notifications for Phase 1 */}
-        <View style={styles.tabHeader}>
-          <View style={styles.tabHeaderContent}>
-            <Ionicons name="notifications" size={24} color={Colors.white} />
-            <Text style={styles.tabHeaderTitle}>Notifications</Text>
+        {/* Tab Navigation */}
+        <View style={styles.tabNavigation}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'teams' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('teams')}
+          >
+            <Ionicons name="people" size={20} color={activeTab === 'teams' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Text style={[styles.tabButtonText, activeTab === 'teams' && styles.tabButtonTextActive]}>Teams</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'organizations' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('organizations')}
+          >
+            <Ionicons name="business" size={20} color={activeTab === 'organizations' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Text style={[styles.tabButtonText, activeTab === 'organizations' && styles.tabButtonTextActive]}>Orgs</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'direct' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('direct')}
+          >
+            <Ionicons name="mail" size={20} color={activeTab === 'direct' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Text style={[styles.tabButtonText, activeTab === 'direct' && styles.tabButtonTextActive]}>Direct</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'notifications' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('notifications')}
+          >
+            <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Text style={[styles.tabButtonText, activeTab === 'notifications' && styles.tabButtonTextActive]}>Alerts</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
             )}
-          </View>
-          <Text style={styles.tabHeaderSubtitle}>Stay updated on your training</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
       
@@ -566,20 +650,63 @@ const MessagesScreen = ({ navigation }) => {
         </View>
 
         {/* Content */}
-        <ScrollView 
-          style={styles.content} 
-          contentContainerStyle={styles.contentContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={Colors.primary}
-              colors={[Colors.primary]}
+        {activeTab === 'teams' ? (
+          teamsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Loading teams...</Text>
+            </View>
+          ) : teams.length === 0 ? (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={styles.contentContainer}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={Colors.primary}
+                  colors={[Colors.primary]}
+                />
+              }
+            >
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateIcon}>👥</Text>
+                <Text style={styles.emptyStateText}>No teams yet</Text>
+                <Text style={styles.emptyStateSubtext}>Join a team to start messaging!</Text>
+              </View>
+            </ScrollView>
+          ) : (
+            <FlatList
+              data={teams}
+              renderItem={renderTeamCard}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.contentContainer}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={Colors.primary}
+                  colors={[Colors.primary]}
+                />
+              }
             />
-          }
-        >
-          {renderTabContent()}
-        </ScrollView>
+          )
+        ) : (
+          <ScrollView 
+            style={styles.content} 
+            contentContainerStyle={styles.contentContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            }
+          >
+            {renderTabContent()}
+          </ScrollView>
+        )}
       </View>
 
       {/* Invite Detail Modal */}
@@ -977,6 +1104,10 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Layout.spacing.sm,
   },
+  emptyStateSubtext: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textTertiary,
+  },
   emptyStateLink: {
     fontSize: Layout.fontSize.md,
     color: Colors.primary,
@@ -986,6 +1117,77 @@ const styles = StyleSheet.create({
   
   bottomPadding: {
     height: Layout.spacing.xl,
+  },
+  
+  // Tab Navigation
+  tabNavigation: {
+    flexDirection: 'row',
+    marginHorizontal: Layout.spacing.lg,
+    marginTop: Layout.spacing.md,
+    gap: Layout.spacing.sm,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 4,
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  tabButtonText: {
+    fontSize: Layout.fontSize.xs,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  tabButtonTextActive: {
+    color: Colors.white,
+  },
+  
+  // Team Cards
+  teamCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.md,
+    marginBottom: Layout.spacing.md,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  teamIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: Layout.borderRadius.md,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Layout.spacing.md,
+  },
+  teamIcon: {
+    fontSize: 24,
+  },
+  teamInfo: {
+    flex: 1,
+  },
+  teamName: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  teamSport: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    textTransform: 'capitalize',
   },
 });
 

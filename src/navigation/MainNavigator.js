@@ -14,6 +14,7 @@ import CalendarScreen from '../screens/calendar/CalendarScreen';
 import PlanDetailsScreen from '../screens/training/PlanDetailsScreen';
 import ActiveTrainingScreen from '../screens/training/ActiveTrainingScreen';
 import MessagesScreen from '../screens/messages/MessagesScreen';
+import TeamMessagesScreen from '../screens/messages/TeamMessagesScreen';
 import Colors from '../constants/Colors';
 import Layout from '../constants/Layout';
 
@@ -79,6 +80,24 @@ const CalendarStack = () => {
             fontWeight: 'bold',
           },
         }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+// Messages Stack Navigator (includes Messages and TeamMessages screens)
+const MessagesStack = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="MessagesMain" 
+        component={MessagesScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TeamMessages" 
+        component={TeamMessagesScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -156,7 +175,7 @@ const MainNavigator = () => {
       
       <Tab.Screen
         name="Messages"
-        component={MessagesScreen}
+        component={MessagesStack}
         options={{
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
