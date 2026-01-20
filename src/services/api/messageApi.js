@@ -108,6 +108,34 @@ export const messageApi = {
       console.error('Error polling messages:', error);
       throw error;
     }
+  },
+
+  /**
+   * Create a reply to a message
+   */
+  async createReply(messageId, content) {
+    try {
+      const response = await apiClient.post(`/api/messages/${messageId}/replies`, {
+        content
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating reply:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get replies for a message
+   */
+  async getReplies(messageId) {
+    try {
+      const response = await apiClient.get(`/api/messages/${messageId}/replies`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching replies:', error);
+      throw error;
+    }
   }
 };
 

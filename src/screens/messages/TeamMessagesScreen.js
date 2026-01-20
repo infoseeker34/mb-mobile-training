@@ -31,6 +31,10 @@ const TeamMessagesScreen = ({ route, navigation }) => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
   const [lastPollTime, setLastPollTime] = useState(new Date().toISOString());
+  const [expandedMessageId, setExpandedMessageId] = useState(null);
+  const [replies, setReplies] = useState({});
+  const [replyContent, setReplyContent] = useState({});
+  const [sendingReply, setSendingReply] = useState({});
 
   useEffect(() => {
     navigation.setOptions({
@@ -49,11 +53,34 @@ const TeamMessagesScreen = ({ route, navigation }) => {
         const newMessages = response.data?.messages || [];
         
         if (newMessages.length > 0) {
-          // Merge new messages into existing list
+          // Update messages and merge new ones
           setMessages(prev => {
             const existingIds = new Set(prev.map(m => m.message_id));
             const uniqueNew = newMessages.filter(m => !existingIds.has(m.message_id));
-            return [...prev, ...uniqueNew];
+            
+            // Merge new messages and update existing ones
+            const updatedMessages = prev.map(msg => {
+              const updated = newMessages.find(m => m.message_id === msg.message_id);
+              return updated || msg;
+            });
+            
+            return [...updatedMessages, ...uniqueNew];
+          });
+          
+          // Check for reply_count changes and reload affected threads
+          newMessages.forEach(async (newMsg) => {
+            // If this message is currently expanded, reload its replies
+            if (expandedMessageId === newMsg.message_id) {
+              console.log('Reloading replies for expanded message:', newMsg.message_id, 'reply_count:', newMsg.reply_count);
+              try {
+                const response = await messageApi.getReplies(newMsg.message_id);
+                const repliesData = response.data?.replies || [];
+                console.log('Loaded replies:', repliesData.length);
+                setReplies(prev => ({ ...prev, [newMsg.message_id]: repliesData }));
+              } catch (error) {
+                console.error('Failed to reload replies:', error);
+              }
+            }
           });
           
           // Auto-mark new messages as read
@@ -78,7 +105,7 @@ const TeamMessagesScreen = ({ route, navigation }) => {
     }, 5000); // Poll every 5 seconds
 
     return () => clearInterval(pollInterval);
-  }, [teamId, lastPollTime]);
+  }, [teamId, lastPollTime, expandedMessageId]);
 
   const loadMessages = async () => {
     try {
@@ -157,6 +184,54 @@ const TeamMessagesScreen = ({ route, navigation }) => {
     setEditingContent('');
   };
 
+  const toggleReplies = async (messageId) => {
+    if (expandedMessageId === messageId) {
+      setExpandedMessageId(null);
+    } else {
+      setExpandedMessageId(messageId);
+      // Always reload replies when opening thread to ensure we have latest
+      try {
+        const response = await messageApi.getReplies(messageId);
+        const repliesData = response.data?.replies || [];
+        setReplies(prev => ({ ...prev, [messageId]: repliesData }));
+      } catch (error) {
+        console.error('Failed to load replies:', error);
+      }
+    }
+  };
+
+  const handleSendReply = async (messageId) => {
+    const content = replyContent[messageId]?.trim();
+    if (!content) return;
+
+    try {
+      setSendingReply(prev => ({ ...prev, [messageId]: true }));
+      await messageApi.createReply(messageId, content);
+      
+      // Clear reply input
+      setReplyContent(prev => ({ ...prev, [messageId]: '' }));
+      
+      // Reload replies
+      const response = await messageApi.getReplies(messageId);
+      const repliesData = response.data?.replies || [];
+      setReplies(prev => ({ ...prev, [messageId]: repliesData }));
+      
+      // Update reply_count for this message without reloading entire list
+      setMessages(prev => prev.map(msg => 
+        msg.message_id === messageId 
+          ? { ...msg, reply_count: repliesData.length }
+          : msg
+      ));
+      
+      // Update last poll time
+      setLastPollTime(new Date().toISOString());
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send reply');
+    } finally {
+      setSendingReply(prev => ({ ...prev, [messageId]: false }));
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -177,11 +252,15 @@ const TeamMessagesScreen = ({ route, navigation }) => {
     const isOwnMessage = currentUserId && item.sender_id === currentUserId;
 
     return (
-      <View style={[
-        styles.messageCard,
-        item.is_announcement && styles.announcementCard,
-        !item.read_at && styles.unreadCard
-      ]}>
+      <TouchableOpacity 
+        style={[
+          styles.messageCard,
+          item.is_announcement && styles.announcementCard,
+          !item.read_at && styles.unreadCard
+        ]}
+        onPress={() => toggleReplies(item.message_id)}
+        activeOpacity={0.7}
+      >
         <View style={styles.messageHeader}>
           <View style={styles.senderInfo}>
             <View style={styles.avatar}>
@@ -230,19 +309,84 @@ const TeamMessagesScreen = ({ route, navigation }) => {
         )}
 
         <View style={styles.messageFooter}>
-          <Text style={styles.readCount}>
-            {item.read_count}/{item.total_recipients} read
-          </Text>
+          <View style={styles.messageStats}>
+            <Text style={styles.readCount}>
+              {item.read_count}/{item.total_recipients} read
+            </Text>
+            {item.reply_count > 0 && (
+              <Text style={styles.replyCount}>
+                • {item.reply_count} {item.reply_count === 1 ? 'reply' : 'replies'}
+              </Text>
+            )}
+          </View>
           {isOwnMessage && !isEditing && (
-            <TouchableOpacity
-              style={styles.editMessageButton}
-              onPress={() => handleEditMessage(item.message_id, item.content)}
-            >
-              <Text style={styles.editMessageButtonText}>Edit</Text>
-            </TouchableOpacity>
+            <View style={styles.messageActions}>
+              <TouchableOpacity
+                style={styles.editMessageButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleEditMessage(item.message_id, item.content);
+                }}
+              >
+                <Text style={styles.editMessageButtonText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
-      </View>
+
+        {/* Replies Section */}
+        {expandedMessageId === item.message_id && (
+          <View style={styles.repliesSection}>
+            {replies[item.message_id] && replies[item.message_id].length > 0 && (
+              <View style={styles.repliesList}>
+                {replies[item.message_id].map((reply) => (
+                  <View key={reply.message_id} style={styles.replyCard}>
+                    <View style={styles.replyHeader}>
+                      <View style={styles.senderInfo}>
+                        <View style={styles.avatarSmall}>
+                          <Text style={styles.avatarTextSmall}>
+                            {reply.sender_name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.senderName}>{reply.sender_name}</Text>
+                          <Text style={styles.messageTime}>
+                            {new Date(reply.created_at).toLocaleString()}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <Text style={styles.replyContent}>{reply.content}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            {/* Reply Input */}
+            <View style={styles.replyCompose}>
+              <TextInput
+                style={styles.replyInput}
+                placeholder="Write a reply..."
+                value={replyContent[item.message_id] || ''}
+                onChangeText={(text) => setReplyContent(prev => ({ ...prev, [item.message_id]: text }))}
+                multiline
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendReplyButton,
+                  (!replyContent[item.message_id]?.trim() || sendingReply[item.message_id]) && styles.sendReplyButtonDisabled
+                ]}
+                onPress={() => handleSendReply(item.message_id)}
+                disabled={!replyContent[item.message_id]?.trim() || sendingReply[item.message_id]}
+              >
+                <Text style={styles.sendReplyButtonText}>
+                  {sendingReply[item.message_id] ? 'Sending...' : 'Send Reply'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -450,13 +594,33 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0'
   },
+  messageStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
   readCount: {
+    fontSize: 12,
+    color: '#666'
+  },
+  replyCount: {
     fontSize: 12,
     color: '#666'
   },
   messageActions: {
     flexDirection: 'row',
     gap: 8
+  },
+  replyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#6c757d',
+    borderRadius: 6
+  },
+  replyButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500'
   },
   actionButton: {
     paddingHorizontal: 12,
@@ -587,12 +751,11 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: '#0066cc',
+    borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
     justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 70
+    alignItems: 'center'
   },
   sendButtonDisabled: {
     backgroundColor: '#ccc'
@@ -600,6 +763,73 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: '#fff',
     fontSize: 15,
+    fontWeight: '600'
+  },
+  repliesSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0'
+  },
+  repliesList: {
+    marginBottom: 12
+  },
+  replyCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8
+  },
+  replyHeader: {
+    marginBottom: 8
+  },
+  avatarSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#6c757d',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8
+  },
+  avatarTextSmall: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  replyContent: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333'
+  },
+  replyCompose: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8
+  },
+  replyInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    maxHeight: 80
+  },
+  sendReplyButton: {
+    backgroundColor: '#0066cc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10
+  },
+  sendReplyButtonDisabled: {
+    backgroundColor: '#ccc'
+  },
+  sendReplyButtonText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '600'
   }
 });
