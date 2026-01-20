@@ -92,6 +92,22 @@ export const messageApi = {
       console.error('Error fetching unread count:', error);
       throw error;
     }
+  },
+
+  /**
+   * Poll for new messages since a given timestamp
+   */
+  async pollMessages(since, teamIds) {
+    try {
+      const params = new URLSearchParams();
+      params.append('since', since);
+      params.append('teamIds', teamIds.join(','));
+      const response = await apiClient.get(`/api/messages/poll?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error polling messages:', error);
+      throw error;
+    }
   }
 };
 

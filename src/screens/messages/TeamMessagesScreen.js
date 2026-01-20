@@ -30,6 +30,7 @@ const TeamMessagesScreen = ({ route, navigation }) => {
   const [newMessage, setNewMessage] = useState('');
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
+  const [lastPollTime, setLastPollTime] = useState(new Date().toISOString());
 
   useEffect(() => {
     navigation.setOptions({
@@ -37,6 +38,47 @@ const TeamMessagesScreen = ({ route, navigation }) => {
     });
     loadMessages();
   }, [teamId, teamName]);
+
+  // Polling effect for real-time updates
+  useEffect(() => {
+    if (!teamId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await messageApi.pollMessages(lastPollTime, [teamId]);
+        const newMessages = response.data?.messages || [];
+        
+        if (newMessages.length > 0) {
+          // Merge new messages into existing list
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.message_id));
+            const uniqueNew = newMessages.filter(m => !existingIds.has(m.message_id));
+            return [...prev, ...uniqueNew];
+          });
+          
+          // Auto-mark new messages as read
+          newMessages.forEach(async (msg) => {
+            if (!msg.read_at) {
+              try {
+                await messageApi.markMessageRead(msg.message_id);
+              } catch (error) {
+                console.error('Failed to auto-mark message as read:', msg.message_id, error);
+              }
+            }
+          });
+        }
+        
+        // Update last poll time
+        if (response.data?.polled_at) {
+          setLastPollTime(response.data.polled_at);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [teamId, lastPollTime]);
 
   const loadMessages = async () => {
     try {
@@ -79,6 +121,8 @@ const TeamMessagesScreen = ({ route, navigation }) => {
       setSending(true);
       await messageApi.sendTeamMessage(teamId, newMessage.trim(), false);
       setNewMessage('');
+      // Update last poll time to prevent duplicate on next poll
+      setLastPollTime(new Date().toISOString());
       await loadMessages();
     } catch (error) {
       Alert.alert('Error', 'Failed to send message');
