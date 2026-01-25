@@ -5,13 +5,15 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import planApi from '../../services/api/planApi';
 import sessionApi from '../../services/api/sessionApi';
 import progressApi from '../../services/api/progressApi';
+import assignmentApi from '../../services/api/assignmentApi';
+import AssignmentModal from '../../components/AssignmentModal';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -163,6 +165,21 @@ const TrainingScreen = ({ navigation }) => {
   const [streakData, setStreakData] = useState(null);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressError, setProgressError] = useState(null);
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [planToAssign, setPlanToAssign] = useState(null);
+  const [teams, setTeams] = useState([]);
+
+  // Fetch teams for assignment
+  const fetchTeams = async () => {
+    try {
+      const teamApi = require('../../services/api/teamApi').default;
+      const response = await teamApi.getTeams();
+      const teamsData = response.teams || response.data?.teams || [];
+      setTeams(teamsData);
+    } catch (error) {
+      console.error('TrainingScreen - Error fetching teams:', error);
+    }
+  };
 
   // Fetch plans from API
   const fetchPlans = async (isRefresh = false) => {
@@ -179,24 +196,24 @@ const TrainingScreen = ({ navigation }) => {
       }
       setPlansError(null);
 
-      const params = {
-        visibility: 'public', // Show public plans for browsing
+      console.log('TrainingScreen - Fetching plans with params:', {
+        visibility: 'public',
         sortBy: 'recent',
         sortOrder: 'desc',
-        limit: 50,
-      };
+        limit: 50
+      });
 
-      // Add search query if present
-      if (searchQuery.trim()) {
-        params.searchQuery = searchQuery.trim();
-      }
+      const response = await planApi.browsePrograms({
+        visibility: 'public',
+        sortBy: 'recent',
+        sortOrder: 'desc',
+        limit: 50
+      });
+      
+      console.log('TrainingScreen - Fetched plans:', response);
 
-      console.log('TrainingScreen - Fetching plans with params:', params);
-      const result = await planApi.browsePrograms(params);
-      console.log('TrainingScreen - Fetched plans:', result);
-
-      setPlans(result.plans || []);
-      setPlansTotal(result.total || 0);
+      setPlans(response.plans || []);
+      setPlansTotal(response.total || 0);
     } catch (error) {
       console.error('TrainingScreen - Error fetching plans:', error);
       setPlansError(error.message || 'Failed to load training plans');
@@ -208,14 +225,13 @@ const TrainingScreen = ({ navigation }) => {
 
   // Load plans on mount and when search changes
   useEffect(() => {
-    if (activeTab === 'browse') {
+    if (user?.userId) {
       fetchPlans();
-    } else if (activeTab === 'history') {
       fetchHistory();
-    } else if (activeTab === 'progress') {
       fetchProgress();
+      fetchTeams();
     }
-  }, [user?.userId, activeTab]);
+  }, [user?.userId]);
 
   // Debounced search
   useEffect(() => {
@@ -323,6 +339,24 @@ const TrainingScreen = ({ navigation }) => {
   const filteredHistory = history.filter(session =>
     (session.programName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Handle assignment save
+  const handleSaveAssignment = async (assignmentData) => {
+    try {
+      const completeAssignmentData = {
+        ...assignmentData,
+        programId: planToAssign.id,
+        assignedToUser: user.userId,
+      };
+      await assignmentApi.createAssignment(completeAssignmentData);
+      Alert.alert('Success', 'Plan assigned to schedule successfully!');
+      setShowAssignmentModal(false);
+      setPlanToAssign(null);
+    } catch (error) {
+      console.error('Error saving assignment:', error);
+      Alert.alert('Error', 'Failed to assign plan to schedule');
+    }
+  };
 
   const renderSearchBar = () => {
     // Only show search for Browse and History tabs
@@ -490,6 +524,18 @@ const TrainingScreen = ({ navigation }) => {
           {plan.equipment && (
             <Text style={styles.equipment}>Equipment: {plan.equipment}</Text>
           )}
+          
+          <TouchableOpacity
+            style={styles.assignButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              setPlanToAssign(plan);
+              setShowAssignmentModal(true);
+            }}
+          >
+            <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+            <Text style={styles.assignButtonText}>Assign to Schedule</Text>
+          </TouchableOpacity>
         </TouchableOpacity>
         ))
       )}
@@ -765,6 +811,21 @@ const TrainingScreen = ({ navigation }) => {
         {activeTab === 'history' && renderHistory()}
         {activeTab === 'progress' && renderProgress()}
       </View>
+
+      {planToAssign && (
+        <AssignmentModal
+          visible={showAssignmentModal}
+          onClose={() => {
+            setShowAssignmentModal(false);
+            setPlanToAssign(null);
+          }}
+          onSave={handleSaveAssignment}
+          programName={planToAssign.name}
+          programId={planToAssign.id}
+          teams={teams}
+          userRole={user?.role || 'player'}
+        />
+      )}
     </View>
   );
 };
@@ -1024,6 +1085,24 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     color: Colors.textTertiary,
     fontStyle: 'italic',
+  },
+  assignButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    marginTop: Layout.spacing.md,
+    gap: Layout.spacing.xs,
+  },
+  assignButtonText: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   
   // History Cards

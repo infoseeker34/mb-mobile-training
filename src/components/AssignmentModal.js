@@ -22,18 +22,25 @@ const AssignmentModal = ({
   onSave,
   assignment = null,
   programName,
+  programId,
   isEditing = false,
+  teams = [],
+  userRole = 'player',
 }) => {
+  const [assignmentType, setAssignmentType] = useState('personal');
+  const [selectedTeam, setSelectedTeam] = useState('');
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(null);
   const [hasEndDate, setHasEndDate] = useState(false);
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState('weekly');
   const [selectedDays, setSelectedDays] = useState([]);
   const [notes, setNotes] = useState('');
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Auto-detect if recurring based on end date
+  const isRecurring = hasEndDate && endDate !== null;
+  const canAssignToTeam = userRole === 'coach' || userRole === 'org_admin' || userRole === 'org_manager';
 
   const daysOfWeek = [
     { label: 'Sun', value: 0 },
@@ -49,20 +56,20 @@ const AssignmentModal = ({
     if (visible) {
       if (assignment) {
         // Editing existing assignment
+        setAssignmentType(assignment.assignedToTeam ? 'team' : 'personal');
+        setSelectedTeam(assignment.assignedToTeam || '');
         setStartDate(new Date(assignment.startDate));
         setEndDate(assignment.endDate ? new Date(assignment.endDate) : null);
         setHasEndDate(!!assignment.endDate);
-        setIsRecurring(assignment.isRecurring || false);
-        setRecurrenceFrequency(assignment.recurrenceFrequency || 'weekly');
         setSelectedDays(assignment.daysOfWeek || []);
         setNotes(assignment.notes || '');
       } else {
         // Creating new assignment - reset to defaults
+        setAssignmentType('personal');
+        setSelectedTeam('');
         setStartDate(new Date());
         setEndDate(null);
         setHasEndDate(false);
-        setIsRecurring(false);
-        setRecurrenceFrequency('weekly');
         setSelectedDays([]);
         setNotes('');
       }
@@ -81,6 +88,11 @@ const AssignmentModal = ({
 
   const handleSave = async () => {
     // Validation
+    if (assignmentType === 'team' && !selectedTeam) {
+      Alert.alert('Validation Error', 'Please select a team.');
+      return;
+    }
+
     if (isRecurring && selectedDays.length === 0) {
       Alert.alert('Validation Error', 'Please select at least one day of the week for recurring assignments.');
       return;
@@ -94,6 +106,9 @@ const AssignmentModal = ({
     setSaving(true);
     try {
       const assignmentData = {
+        programId,
+        assignmentType,
+        assignedToTeam: assignmentType === 'team' ? selectedTeam : null,
         startDate: startDate.toISOString(),
         endDate: hasEndDate && endDate ? endDate.toISOString() : null,
         isRecurring,
@@ -141,6 +156,73 @@ const AssignmentModal = ({
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <Text style={styles.programName}>{programName}</Text>
 
+            {/* Assignment Type (Personal or Team) */}
+            {canAssignToTeam && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Assign To</Text>
+                <View style={styles.segmentedControl}>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentButton,
+                      assignmentType === 'personal' && styles.segmentButtonActive,
+                    ]}
+                    onPress={() => setAssignmentType('personal')}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentButtonText,
+                        assignmentType === 'personal' && styles.segmentButtonTextActive,
+                      ]}
+                    >
+                      My Schedule
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentButton,
+                      assignmentType === 'team' && styles.segmentButtonActive,
+                    ]}
+                    onPress={() => setAssignmentType('team')}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentButtonText,
+                        assignmentType === 'team' && styles.segmentButtonTextActive,
+                      ]}
+                    >
+                      Team Schedule
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Team Picker */}
+            {canAssignToTeam && assignmentType === 'team' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Select Team</Text>
+                <View style={styles.teamPickerContainer}>
+                  {teams.map((team) => (
+                    <TouchableOpacity
+                      key={team.id}
+                      style={[
+                        styles.teamOption,
+                        selectedTeam === team.id && styles.teamOptionActive,
+                      ]}
+                      onPress={() => setSelectedTeam(team.id)}
+                    >
+                      <Ionicons
+                        name={selectedTeam === team.id ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={20}
+                        color={selectedTeam === team.id ? Colors.primary : Colors.textSecondary}
+                      />
+                      <Text style={styles.teamOptionText}>{team.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* Start Date */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Start Date</Text>
@@ -182,20 +264,7 @@ const AssignmentModal = ({
               )}
             </View>
 
-            {/* Recurring Toggle */}
-            <View style={styles.section}>
-              <View style={styles.toggleRow}>
-                <Text style={styles.sectionLabel}>Recurring</Text>
-                <TouchableOpacity
-                  style={[styles.toggle, isRecurring && styles.toggleActive]}
-                  onPress={() => setIsRecurring(!isRecurring)}
-                >
-                  <View style={[styles.toggleThumb, isRecurring && styles.toggleThumbActive]} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Days of Week (for recurring assignments) */}
+            {/* Days of Week (shown when end date is set) */}
             {isRecurring && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>Days of Week</Text>
@@ -494,6 +563,55 @@ const styles = StyleSheet.create({
   dayButtonTextActive: {
     color: Colors.white,
     fontWeight: '600',
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: Colors.background,
+    borderRadius: Layout.borderRadius.md,
+    padding: 4,
+    gap: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.sm,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  segmentButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  segmentButtonText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  segmentButtonTextActive: {
+    color: Colors.white,
+    fontWeight: '600',
+  },
+  teamPickerContainer: {
+    gap: Layout.spacing.sm,
+  },
+  teamOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Layout.spacing.md,
+    backgroundColor: Colors.background,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Layout.spacing.sm,
+  },
+  teamOptionActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight + '20',
+  },
+  teamOptionText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.text,
+    fontWeight: '500',
   },
   notesInput: {
     backgroundColor: Colors.background,

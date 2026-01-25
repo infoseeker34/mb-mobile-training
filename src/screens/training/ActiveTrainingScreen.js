@@ -118,7 +118,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
             }, 600);
             // Auto-finish the task after sounds play
             setTimeout(() => {
-              handleFinish();
+              handleTaskComplete();
             }, 1500);
             return 0;
           }
@@ -447,7 +447,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
           <View style={styles.actionButtons}>
             <TouchableOpacity 
               style={[styles.actionButton, styles.skipButton]}
-              onPress={handleSkip}
+              onPress={handleSkipTask}
             >
               <Ionicons name="play-skip-forward" size={20} color={Colors.textSecondary} />
               <Text style={styles.skipButtonText}>Skip</Text>
@@ -455,7 +455,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
 
             <TouchableOpacity 
               style={[styles.actionButton, styles.finishButton]}
-              onPress={handleFinish}
+              onPress={handleTaskComplete}
             >
               <Ionicons name="checkmark-circle" size={20} color={Colors.textInverse} />
               <Text style={styles.finishButtonText}>Finish</Text>

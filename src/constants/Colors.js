@@ -91,6 +91,10 @@ export default {
   streakFire: palette.streakOrange,
   achievementGold: palette.accent,
   
+  // Gradients (arrays for LinearGradient)
+  gradientPrimary: [palette.primary, palette.primaryDark],
+  gradientXP: [palette.xpStart, palette.xpEnd],
+  
   // Overlays
   overlay: 'rgba(0, 0, 0, 0.5)',
   overlayLight: 'rgba(0, 0, 0, 0.3)',

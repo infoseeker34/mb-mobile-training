@@ -49,7 +49,7 @@ const TeamMessagesScreen = ({ route, navigation }) => {
 
     const pollInterval = setInterval(async () => {
       try {
-        const response = await messageApi.pollMessages(lastPollTime, [teamId]);
+        const response = await messageApi.pollMessages(lastPollTime, [teamId], []);
         const newMessages = response.data?.messages || [];
         
         if (newMessages.length > 0) {

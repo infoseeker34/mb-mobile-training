@@ -4,17 +4,22 @@
  * Bottom tab navigation for main app screens.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { messageApi } from '../services/api/messageApi';
 import HomeScreen from '../screens/home/HomeScreen';
 import TrainingScreen from '../screens/training/TrainingScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
 import PlanDetailsScreen from '../screens/training/PlanDetailsScreen';
 import ActiveTrainingScreen from '../screens/training/ActiveTrainingScreen';
 import MessagesScreen from '../screens/messages/MessagesScreen';
-import TeamMessagesScreen from '../screens/messages/TeamMessagesScreen';
+import ConversationListScreen from '../screens/messages/ConversationListScreen';
+import ThreadDetailScreen from '../screens/messages/ThreadDetailScreen';
+import ComposeMessageScreen from '../screens/messages/ComposeMessageScreen';
+import InvitationsScreen from '../screens/messages/InvitationsScreen';
 import Colors from '../constants/Colors';
 import Layout from '../constants/Layout';
 
@@ -85,25 +90,92 @@ const CalendarStack = () => {
   );
 };
 
-// Messages Stack Navigator (includes Messages and TeamMessages screens)
+// Messages Stack Navigator (includes ConversationList, ThreadDetail, and Compose screens)
 const MessagesStack = () => {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerBackTitleVisible: false,
+      }}
+    >
       <Stack.Screen 
-        name="MessagesMain" 
-        component={MessagesScreen}
-        options={{ headerShown: false }}
+        name="ConversationList" 
+        component={ConversationListScreen}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen 
-        name="TeamMessages" 
-        component={TeamMessagesScreen}
-        options={{ headerShown: false }}
+        name="ThreadDetail" 
+        component={ThreadDetailScreen}
+        options={{
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen 
+        name="ComposeMessage" 
+        component={ComposeMessageScreen}
+        options={{
+          title: 'New Message',
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen 
+        name="Invitations" 
+        component={InvitationsScreen}
+        options={{
+          title: 'Invitations',
+          headerStyle: {
+            backgroundColor: Colors.primary,
+          },
+          headerTintColor: Colors.textInverse,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
       />
     </Stack.Navigator>
   );
 };
 
 const MainNavigator = () => {
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
+  useEffect(() => {
+    loadUnreadCount();
+    
+    // Poll for unread count every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadUnreadCount = async () => {
+    try {
+      const response = await messageApi.getConversations();
+      if (response.status === 'success' && response.data) {
+        const totalUnread = response.data.conversations.reduce(
+          (sum, conv) => sum + (conv.unread_count || 0),
+          0
+        );
+        setUnreadMessageCount(totalUnread);
+      }
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -178,11 +250,18 @@ const MainNavigator = () => {
         component={MessagesStack}
         options={{
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "chatbubbles" : "chatbubbles-outline"} 
-              size={size} 
-              color={color} 
-            />
+            <View>
+              <Ionicons 
+                name={focused ? "chatbubbles" : "chatbubbles-outline"} 
+                size={size} 
+                color={color} 
+              />
+              {unreadMessageCount > 0 && (
+                <View style={tabBadgeStyles.badge}>
+                  <Text style={tabBadgeStyles.badgeText}>{unreadMessageCount}</Text>
+                </View>
+              )}
+            </View>
           ),
           headerShown: false,
         }}
@@ -215,5 +294,25 @@ const placeholderStyles = {
     color: Colors.textSecondary,
   },
 };
+
+const tabBadgeStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+});
 
 export default MainNavigator;
