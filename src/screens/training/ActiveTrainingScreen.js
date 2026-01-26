@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import apiClient from '../../services/api/apiClient';
+import planApi from '../../services/api/planApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -26,8 +27,11 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 0.5; // Optimized for space usage
 
 const ActiveTrainingScreen = ({ route, navigation }) => {
-  const { planData, assignmentId } = route.params;
+  const { planData: initialPlanData, assignmentId, planId, programId } = route.params || {};
   
+  const [planData, setPlanData] = useState(initialPlanData);
+  const [loadingPlan, setLoadingPlan] = useState(!initialPlanData);
+  const [planError, setPlanError] = useState(null);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerPaused, setTimerPaused] = useState(false);
@@ -51,6 +55,28 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   const currentTask = tasks[currentTaskIndex];
   const isLastTask = currentTaskIndex === tasks.length - 1;
   const allTasksComplete = currentTaskIndex >= tasks.length;
+
+  // Fetch plan data if not provided
+  useEffect(() => {
+    if (!initialPlanData && (planId || programId)) {
+      fetchPlanData();
+    }
+  }, []);
+
+  const fetchPlanData = async () => {
+    try {
+      setLoadingPlan(true);
+      setPlanError(null);
+      const id = planId || programId;
+      const plan = await planApi.getProgramDetails(id);
+      setPlanData(plan);
+    } catch (error) {
+      console.error('Error fetching plan data:', error);
+      setPlanError('Failed to load training plan');
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
 
   // Configure audio mode on mount
   useEffect(() => {
@@ -334,6 +360,44 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     return { totalTasks, completed, skipped, totalXp };
   };
 
+  // Loading state
+  if (loadingPlan) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading training plan...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (planError || !planData) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={64} color={Colors.error} />
+          <Text style={styles.errorText}>{planError || 'Failed to load training plan'}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              if (planId || programId) {
+                fetchPlanData();
+              } else {
+                navigation.goBack();
+              }
+            }}
+          >
+            <Text style={styles.retryButtonText}>
+              {planId || programId ? 'Retry' : 'Go Back'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Summary Screen
   if (allTasksComplete) {
     const stats = calculateStats();
@@ -344,7 +408,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
           <View style={styles.summaryHeader}>
             <Ionicons name="trophy" size={80} color={Colors.primary} />
             <Text style={styles.summaryTitle}>Workout Complete! 🎉</Text>
-            <Text style={styles.planName}>{planData.name}</Text>
+            <Text style={styles.planName}>{planData?.name || 'Training Session'}</Text>
           </View>
 
           <View style={styles.statsContainer}>
@@ -650,6 +714,41 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: Layout.fontSize.lg,
     fontWeight: 'bold',
+    color: Colors.textInverse,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Layout.spacing.xl,
+  },
+  loadingText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.md,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Layout.spacing.xl,
+  },
+  errorText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.error,
+    textAlign: 'center',
+    marginTop: Layout.spacing.md,
+    marginBottom: Layout.spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
     color: Colors.textInverse,
   },
 });

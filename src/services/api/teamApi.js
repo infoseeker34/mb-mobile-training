@@ -77,6 +77,29 @@ const teamApi = {
   },
 
   /**
+   * Get team streak data
+   * @param {string} teamId - Team ID
+   * @returns {Promise<object>} Team streak data
+   */
+  async getTeamStreak(teamId) {
+    try {
+      console.log('teamApi - getTeamStreak called for:', teamId);
+      
+      const response = await apiClient.get(`/api/teams/${teamId}/streak`);
+      console.log('teamApi - Streak response:', response.data);
+      
+      if (response.data.status === 'success') {
+        return response.data.data.streak;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch team streak');
+      }
+    } catch (error) {
+      console.error('Error fetching team streak:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Create a new team
    * @param {object} teamData - Team data
    * @returns {Promise<object>} Created team

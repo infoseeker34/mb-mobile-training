@@ -4,92 +4,249 @@
  * Main dashboard with user stats, progress, and quick actions.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import NextTrainingWidget from '../../components/home/NextTrainingWidget';
+import TeamStatusWidget from '../../components/home/TeamStatusWidget';
+import progressApi from '../../services/api/progressApi';
+import teamActivityApi from '../../services/api/teamActivityApi';
+import teamApi from '../../services/api/teamApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
-// Mock social feed data
-const MOCK_MILESTONES = [
-  {
-    id: '1',
-    type: 'milestone',
-    userId: 'user2',
-    userName: 'Sarah Johnson',
-    achievement: 'Reached Level 5',
-    iconName: 'trophy',
-    iconColor: Colors.warning,
-    timestamp: '2 hours ago',
-    celebrated: false,
-  },
-  {
-    id: '2',
-    type: 'milestone',
-    userId: 'user3',
-    userName: 'Mike Chen',
-    achievement: '10-Day Streak',
-    iconName: 'flame',
-    iconColor: Colors.error,
-    timestamp: '5 hours ago',
-    celebrated: true,
-  },
-  {
-    id: '3',
-    type: 'milestone',
-    userId: 'user4',
-    userName: 'Emma Davis',
-    achievement: 'Completed 50 Sessions',
-    iconName: 'ribbon',
-    iconColor: Colors.primary,
-    timestamp: 'Yesterday',
-    celebrated: false,
-  },
-];
-
-const MOCK_INCOMPLETE = [
-  {
-    id: '1',
-    userId: 'user5',
-    userName: 'Alex Martinez',
-    teamName: 'U12 Boys',
-    planName: 'Speed & Agility Fundamentals',
-    daysOverdue: 0,
-    nudged: false,
-  },
-  {
-    id: '2',
-    userId: 'user6',
-    userName: 'Jordan Lee',
-    teamName: 'Soccer Stars Academy',
-    planName: 'Ball Control Mastery',
-    daysOverdue: 1,
-    nudged: false,
-  },
-];
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const [milestones, setMilestones] = useState(MOCK_MILESTONES);
-  const [incomplete, setIncomplete] = useState(MOCK_INCOMPLETE);
+  const [milestones, setMilestones] = useState([]);
+  const [incomplete, setIncomplete] = useState([]);
+  const [level, setLevel] = useState(1);
+  const [streak, setStreak] = useState(0);
+  const [teams, setTeams] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+  const [milestonesLoading, setMilestonesLoading] = useState(true);
+  const [incompleteLoading, setIncompleteLoading] = useState(true);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleCelebrate = (milestoneId) => {
-    setMilestones(prev =>
-      prev.map(m =>
-        m.id === milestoneId ? { ...m, celebrated: true } : m
-      )
-    );
+  const handleCelebrate = async (milestoneId) => {
+    try {
+      await teamActivityApi.celebrateActivity(milestoneId);
+      setMilestones(prev =>
+        prev.map(m =>
+          m.id === milestoneId ? { ...m, celebrated: true } : m
+        )
+      );
+    } catch (error) {
+      console.error('Error celebrating milestone:', error);
+    }
   };
 
-  const handleNudge = (incompleteId) => {
-    setIncomplete(prev =>
-      prev.map(i =>
-        i.id === incompleteId ? { ...i, nudged: true } : i
-      )
-    );
+  const handleNudge = async (incompleteId) => {
+    try {
+      const item = incomplete.find(i => i.id === incompleteId);
+      if (item) {
+        await teamActivityApi.sendNudge(item.userId, item.assignmentId);
+        setIncomplete(prev =>
+          prev.map(i =>
+            i.id === incompleteId ? { ...i, nudged: true } : i
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error sending nudge:', error);
+      if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (user?.userId) {
+      fetchUserStats();
+      fetchTeamMilestones();
+      fetchIncompleteAssignments();
+      fetchUserTeams();
+    }
+  }, [user?.userId]);
+
+  const fetchUserStats = async () => {
+    try {
+      setStatsLoading(true);
+      setStatsError(null);
+
+      // Fetch progress (level, XP)
+      const progressData = await progressApi.getPlayerProgress();
+      console.log('HomeScreen - Progress data:', progressData);
+      if (progressData?.currentLevel !== undefined) {
+        setLevel(progressData.currentLevel);
+      }
+
+      // Fetch streak data
+      const streakData = await progressApi.getStreakData();
+      console.log('HomeScreen - Streak data:', streakData);
+      // Handle null streak (user hasn't started a streak yet)
+      if (streakData === null) {
+        setStreak(0);
+      } else if (streakData?.currentStreak !== undefined) {
+        setStreak(streakData.currentStreak);
+      }
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      setStatsError('Failed to load stats');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchTeamMilestones = async () => {
+    try {
+      setMilestonesLoading(true);
+      const activities = await teamActivityApi.getUserTeamsActivityFeed(10);
+      
+      // Transform activities to milestone format
+      const transformedMilestones = activities.map(activity => ({
+        id: activity.activityId,
+        type: 'milestone',
+        userId: activity.userId,
+        userName: activity.userName,
+        achievement: getAchievementText(activity),
+        iconName: getActivityIcon(activity.activityType),
+        iconColor: getActivityColor(activity.activityType),
+        timestamp: getRelativeTime(activity.createdAt),
+        celebrated: activity.userCelebrated,
+        activityId: activity.activityId
+      }));
+      
+      setMilestones(transformedMilestones);
+    } catch (error) {
+      console.error('Error fetching team milestones:', error);
+    } finally {
+      setMilestonesLoading(false);
+    }
+  };
+
+  const fetchIncompleteAssignments = async () => {
+    try {
+      setIncompleteLoading(true);
+      const assignments = await teamActivityApi.getUserTeamsIncompleteAssignments();
+      
+      // Transform assignments to incomplete format
+      const transformedIncomplete = assignments.map(assignment => ({
+        id: assignment.assignmentId,
+        userId: assignment.userId,
+        userName: assignment.userName,
+        teamName: assignment.teamName,
+        planName: assignment.programName,
+        daysOverdue: assignment.daysOverdue,
+        nudged: false,
+        assignmentId: assignment.assignmentId
+      }));
+      
+      setIncomplete(transformedIncomplete);
+    } catch (error) {
+      console.error('Error fetching incomplete assignments:', error);
+    } finally {
+      setIncompleteLoading(false);
+    }
+  };
+
+  const fetchUserTeams = async () => {
+    try {
+      setTeamsLoading(true);
+      const teamsData = await teamApi.getTeams();
+      setTeams(teamsData.teams || []);
+    } catch (error) {
+      console.error('Error fetching user teams:', error);
+    } finally {
+      setTeamsLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Refresh all data in parallel
+      await Promise.all([
+        fetchUserStats(),
+        fetchTeamMilestones(),
+        fetchIncompleteAssignments(),
+        fetchUserTeams()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const getAchievementText = (activity) => {
+    switch (activity.activityType) {
+      case 'level_up':
+        return `Reached Level ${activity.activityData.new_level}`;
+      case 'streak_milestone':
+        return `${activity.activityData.streak_days}-Day Streak`;
+      case 'sessions_milestone':
+        return `Completed ${activity.activityData.total_sessions} Sessions`;
+      case 'achievement_unlocked':
+        return activity.activityData.achievement_name || 'Achievement Unlocked';
+      default:
+        return 'Milestone Achieved';
+    }
+  };
+
+  const getActivityIcon = (activityType) => {
+    switch (activityType) {
+      case 'level_up':
+        return 'trophy';
+      case 'streak_milestone':
+        return 'flame';
+      case 'sessions_milestone':
+        return 'ribbon';
+      case 'achievement_unlocked':
+        return 'star';
+      default:
+        return 'trophy';
+    }
+  };
+
+  const getActivityColor = (activityType) => {
+    switch (activityType) {
+      case 'level_up':
+        return Colors.warning;
+      case 'streak_milestone':
+        return Colors.error;
+      case 'sessions_milestone':
+        return Colors.primary;
+      case 'achievement_unlocked':
+        return Colors.success;
+      default:
+        return Colors.primary;
+    }
+  };
+
+  const getRelativeTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString();
+    }
   };
 
   const renderMilestone = (milestone) => (
@@ -190,25 +347,71 @@ const HomeScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
       >
         {/* Quick Stats */}
         <View style={styles.statsContainer}>
-          <StatCard
-            iconName="flash"
-            label="Current Level"
-            value="1"
-            color={Colors.primary}
-          />
-          <StatCard
-            iconName="flame"
-            label="Day Streak"
-            value="0"
-            color={Colors.streakFire}
-          />
+          {statsLoading ? (
+            <View style={styles.statsLoadingContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+            </View>
+          ) : statsError ? (
+            <View style={styles.statsErrorContainer}>
+              <Text style={styles.statsErrorText}>{statsError}</Text>
+            </View>
+          ) : (
+            <View style={styles.combinedStatCard}>
+              <View style={styles.statItem}>
+                <View style={[styles.statIconContainer, { backgroundColor: Colors.primary + '15' }]}>
+                  <Ionicons name="flash" size={28} color={Colors.primary} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statValue}>{level.toString()}</Text>
+                  <Text style={styles.statLabel}>Current Level</Text>
+                </View>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <View style={[styles.statIconContainer, { backgroundColor: Colors.streakFire + '15' }]}>
+                  <Ionicons name="flame" size={28} color={Colors.streakFire} />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statValue}>{streak.toString()}</Text>
+                  <Text style={styles.statLabel}>Day Streak</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Next Training Widget */}
         <NextTrainingWidget userId={user?.userId} />
+
+        {/* Team Status Widgets */}
+        {teamsLoading ? (
+          <View style={styles.teamsLoadingContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+          </View>
+        ) : teams.length > 0 ? (
+          <View style={styles.teamsSection}>
+            <Text style={styles.sectionTitle}>⚽ My Teams</Text>
+            {teams.map(team => (
+              <TeamStatusWidget
+                key={team.id}
+                teamId={team.id}
+                teamName={team.name}
+                userId={user?.userId}
+              />
+            ))}
+          </View>
+        ) : null}
 
         {/* Team Milestones */}
         {milestones.length > 0 && (
@@ -236,17 +439,6 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-const StatCard = ({ iconName, label, value, color }) => (
-  <View style={[styles.statCard, { borderLeftColor: color }]}>
-    <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
-      <Ionicons name={iconName} size={28} color={color} />
-    </View>
-    <View style={styles.statContent}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -311,19 +503,29 @@ const styles = StyleSheet.create({
   statsContainer: {
     marginBottom: Layout.spacing.xl,
   },
-  statCard: {
+  combinedStatCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
     padding: Layout.spacing.lg,
     borderRadius: 16,
     marginBottom: Layout.spacing.md,
-    borderLeftWidth: 4,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+  },
+  statItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 56,
+    backgroundColor: Colors.border,
+    marginHorizontal: Layout.spacing.md,
   },
   statIconContainer: {
     width: 56,
@@ -344,6 +546,22 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: Layout.fontSize.sm,
     color: Colors.textSecondary,
+  },
+  statsLoadingContainer: {
+    padding: Layout.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsErrorContainer: {
+    padding: Layout.spacing.lg,
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    marginBottom: Layout.spacing.md,
+  },
+  statsErrorText: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.error,
+    textAlign: 'center',
   },
   
   // Sections
@@ -442,6 +660,15 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     color: Colors.error,
     fontWeight: '600',
+  },
+  
+  // Team sections
+  teamsLoadingContainer: {
+    padding: Layout.spacing.lg,
+    alignItems: 'center',
+  },
+  teamsSection: {
+    marginBottom: Layout.spacing.md,
   },
   
   // Celebrate Button

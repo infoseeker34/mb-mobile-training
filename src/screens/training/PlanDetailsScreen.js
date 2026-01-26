@@ -31,7 +31,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 0.5625; // 16:9 aspect ratio
 
 const PlanDetailsScreen = ({ route, navigation }) => {
-  const { assignmentId, programId, programName } = route.params;
+  const { assignmentId, programId, programName = 'Training Plan' } = route.params || {};
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
