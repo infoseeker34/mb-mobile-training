@@ -46,6 +46,14 @@ class UserApi {
     const response = await apiClient.get('/api/users/me/organizations');
     return response.data;
   }
+
+  /**
+   * Delete user account (required by App Store Guidelines 5.1.1)
+   */
+  async deleteAccount() {
+    const response = await apiClient.delete('/api/users/me');
+    return response.data;
+  }
 }
 
 export default new UserApi();

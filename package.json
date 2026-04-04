@@ -6,20 +6,34 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --coverage --ci --runInBand --forceExit",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "ai:gen-tests": "node scripts/ai/generate-tests.mjs",
+    "ai:security": "node scripts/ai/security-audit.mjs",
+    "ai:fix-debug": "node scripts/ai/fix-debug-code.mjs",
+    "ai:coverage-gaps": "node scripts/ai/coverage-gaps.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "^8.6.0",
+    "@react-native-community/netinfo": "^11.4.1",
     "@react-native-picker/picker": "^2.11.4",
     "@react-navigation/bottom-tabs": "^6.6.1",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
-    "axios": "^1.6.0",
+    "axios": "^1.7.9",
     "expo": "~54.0.13",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "~7.0.10",
+    "expo-constants": "~17.0.8",
     "expo-linear-gradient": "^15.0.8",
     "expo-notifications": "~0.32.16",
     "expo-secure-store": "~15.0.8",
@@ -30,11 +44,56 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-webview": "13.15.0",
-    "react-native-youtube-iframe": "^2.4.1"
+    "react-native-youtube-iframe": "^2.4.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.0.14",
     "@babel/core": "^7.20.0",
-    "@react-native-community/cli": "latest"
+    "@react-native-community/cli": "14.1.0",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^12.9.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-native": "^4.1.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~54.0.0",
+    "msw": "^2.7.0",
+    "prettier": "^3.4.2"
+  },
+  "overrides": {
+    "fast-xml-parser": "^4.5.0",
+    "undici": "^6.21.0",
+    "tar": "^6.2.1"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "setupFilesAfterFramework": [
+      "@testing-library/jest-native/extend-expect"
+    ],
+    "setupFiles": [
+      "./jest.setup.js"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|zod)"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/__tests__/**",
+      "!src/**/*.test.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 80,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    },
+    "moduleNameMapper": {
+      "^@env$": "<rootDir>/src/__mocks__/env.js"
+    }
   },
   "private": true
 }

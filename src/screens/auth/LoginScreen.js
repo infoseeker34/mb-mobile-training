@@ -5,14 +5,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/common/Button';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
-const LoginScreen = () => {
+const LoginScreen = ({ navigation }) => {
   const { login, isLoading } = useAuth();
 
   return (
@@ -49,6 +49,15 @@ const LoginScreen = () => {
           <Text style={styles.helpText}>
             Use your Magic Board account to sign in
           </Text>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy')}>
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalSeparator}> · </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('TermsOfService')}>
+              <Text style={styles.legalLinkText}>Terms of Service</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -137,6 +146,9 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
   },
+  legalLinks: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
+  legalLinkText: { fontSize: 12, color: '#6366f1', textDecorationLine: 'underline' },
+  legalSeparator: { fontSize: 12, color: '#4b5563' },
 });
 
 export default LoginScreen;

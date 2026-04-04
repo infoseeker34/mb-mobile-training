@@ -1,6 +1,6 @@
 /**
  * Authentication Context
- * 
+ *
  * Manages authentication state and provides auth methods to the app.
  */
 
@@ -11,8 +11,9 @@ import { COGNITO_CONFIG } from '../constants/Config';
 import SecureStorage from '../services/storage/SecureStorage';
 import authApi from '../services/api/authApi';
 import userApi from '../services/api/userApi';
+import authEventBus from '../services/utils/authEventBus';
+import logger from '../services/utils/logger';
 
-// Enable web browser to dismiss on iOS
 WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext({
@@ -31,14 +32,12 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Configure OAuth discovery
   const discovery = {
     authorizationEndpoint: `https://${COGNITO_CONFIG.domain}/oauth2/authorize`,
     tokenEndpoint: `https://${COGNITO_CONFIG.domain}/oauth2/token`,
     revocationEndpoint: `https://${COGNITO_CONFIG.domain}/oauth2/revoke`,
   };
 
-  // Configure auth request
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: COGNITO_CONFIG.clientId,
@@ -50,17 +49,21 @@ export const AuthProvider = ({ children }) => {
     discovery
   );
 
-  // Handle OAuth response
   useEffect(() => {
     if (response?.type === 'success') {
       handleOAuthSuccess(response);
     } else if (response?.type === 'error') {
-      console.error('OAuth error:', response.error);
+      logger.error('OAuth error:', response.error);
       setIsLoading(false);
     }
   }, [response]);
 
-  // Decode JWT token (base64)
+  // Subscribe to logout events from apiClient (token refresh failures)
+  useEffect(() => {
+    const unsubscribe = authEventBus.on('logout', logout);
+    return unsubscribe;
+  }, []);
+
   const decodeJWT = (token) => {
     try {
       const base64Url = token.split('.')[1];
@@ -73,111 +76,79 @@ export const AuthProvider = ({ children }) => {
       );
       return JSON.parse(jsonPayload);
     } catch (error) {
-      console.error('Error decoding JWT:', error);
       return null;
     }
   };
 
-  // Handle successful OAuth response
   const handleOAuthSuccess = async (authResponse) => {
     try {
       const { code } = authResponse.params;
-
-      // Exchange code for tokens
       const tokenResponse = await AuthSession.exchangeCodeAsync(
         {
           clientId: COGNITO_CONFIG.clientId,
           code,
           redirectUri: COGNITO_CONFIG.redirectUri,
-          extraParams: {
-            code_verifier: request.codeVerifier,
-          },
+          extraParams: { code_verifier: request.codeVerifier },
         },
         discovery
       );
 
       const { accessToken, refreshToken, idToken } = tokenResponse;
+      const idTokenPayload = idToken ? decodeJWT(idToken) : null;
 
-      // Decode ID token to get user info (email, username)
-      const idTokenPayload = decodeJWT(idToken);
-      console.log('ID Token payload:', idTokenPayload);
-
-      // Save tokens
       await SecureStorage.saveTokens(accessToken, refreshToken, idToken);
-
-      // Validate token and get user info
       await validateAndLoadUser(idTokenPayload);
     } catch (error) {
-      console.error('Error exchanging code for tokens:', error);
+      logger.error('Error exchanging code for tokens:', error.message);
       setIsLoading(false);
     }
   };
 
-  // Validate token and load user data
   const validateAndLoadUser = async (idTokenPayload = null) => {
     try {
-      // Validate token
       const validationResponse = await authApi.validateToken();
-      
+
       if (validationResponse.status === 'success' && validationResponse.data.valid) {
         const userData = validationResponse.data.user;
-        
-        // Merge with ID token data if available (contains email, username)
+
         if (idTokenPayload) {
           userData.email = idTokenPayload.email || userData.email;
           userData.username = idTokenPayload['cognito:username'] || idTokenPayload.username || userData.username;
         }
-        
-        console.log('User data after merge:', userData);
-        
-        // Save user ID
+
         await SecureStorage.saveUserId(userData.userId);
-        
-        // Try to get full profile
+
         try {
           const profileResponse = await userApi.getCurrentUser();
-          console.log('Fetched full profile:', profileResponse.data.user);
           setUser(profileResponse.data.user);
         } catch (profileError) {
-          // Profile doesn't exist yet (first-time user)
-          // Set basic user data from validation
-          console.log('Profile fetch failed, using basic user data:', profileError.message);
+          // First-time user - profile doesn't exist yet
           setUser(userData);
         }
-        
+
         setIsAuthenticated(true);
       } else {
-        await logout();
+        await performLogout();
       }
     } catch (error) {
-      console.error('Error validating token:', error);
-      
-      // Token is invalid or expired - try to refresh it
-      console.log('Token validation failed, attempting refresh...');
+      logger.warn('Token validation failed, attempting refresh...');
       try {
-        const refreshToken = await SecureStorage.getRefreshToken();
+        // Use tokenManager's refresh (has the mutex)
+        const SecureStore = await import('../services/storage/SecureStorage');
+        const refreshToken = await SecureStore.default.getRefreshToken();
         if (refreshToken) {
           const refreshResponse = await authApi.refreshToken(refreshToken);
-          
           if (refreshResponse.status === 'success' && refreshResponse.data.tokens) {
-            console.log('Token refresh successful');
             const { accessToken, idToken } = refreshResponse.data.tokens;
-            
-            // Save new tokens (keep existing refresh token)
             await SecureStorage.saveTokens(accessToken, refreshToken, idToken);
-            
-            // Retry validation with new token
             const newIdTokenPayload = idToken ? decodeJWT(idToken) : null;
             await validateAndLoadUser(newIdTokenPayload);
             return;
           }
         }
       } catch (refreshError) {
-        console.error('Token refresh failed:', refreshError);
+        logger.error('Token refresh failed:', refreshError.message);
       }
-      
-      // Refresh failed - clear everything and require re-login
-      console.log('Token refresh failed, clearing auth state');
       await SecureStorage.clearTokens();
       setUser(null);
       setIsAuthenticated(false);
@@ -186,21 +157,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Check if user is already authenticated
   const checkAuthStatus = async () => {
     try {
       const accessToken = await SecureStorage.getAccessToken();
-      
       if (accessToken) {
-        console.log('Found stored access token, validating...');
         await validateAndLoadUser();
       } else {
-        console.log('No stored access token found');
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      // Clear any invalid tokens
+      logger.error('Error checking auth status:', error.message);
       await SecureStorage.clearTokens();
       setUser(null);
       setIsAuthenticated(false);
@@ -208,54 +174,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login function
   const login = async () => {
     try {
       await promptAsync();
     } catch (error) {
-      console.error('Error during login:', error);
+      logger.error('Error during login:', error.message);
     }
   };
 
-  // Logout function
+  const performLogout = async () => {
+    await SecureStorage.clearTokens();
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
   const logout = async () => {
     try {
-      await SecureStorage.clearTokens();
-      setUser(null);
-      setIsAuthenticated(false);
+      await performLogout();
     } catch (error) {
-      console.error('Error during logout:', error);
+      logger.error('Error during logout:', error.message);
     }
   };
 
-  // Set up global logout event listener
-  useEffect(() => {
-    global.authEventEmitter = {
-      emit: (event) => {
-        if (event === 'logout') {
-          logout();
-        }
-      },
-    };
-
-    return () => {
-      global.authEventEmitter = null;
-    };
-  }, []);
-
-  // Check auth status on mount
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
-  const value = {
-    user,
-    isLoading,
-    isAuthenticated,
-    login,
-    logout,
-    checkAuthStatus,
-  };
+  const value = { user, isLoading, isAuthenticated, login, logout, checkAuthStatus };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

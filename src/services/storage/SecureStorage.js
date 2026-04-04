@@ -7,6 +7,7 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
+import logger from '../utils/logger';
 
 const KEYS = {
   ACCESS_TOKEN: 'access_token',
@@ -27,7 +28,7 @@ class SecureStorageService {
         await SecureStore.setItemAsync(KEYS.ID_TOKEN, idToken);
       }
     } catch (error) {
-      console.error('Error saving tokens:', error);
+      logger.error('Error saving tokens:', error);
       throw error;
     }
   }
@@ -43,7 +44,7 @@ class SecureStorageService {
       
       return { accessToken, refreshToken, idToken };
     } catch (error) {
-      console.error('Error getting tokens:', error);
+      logger.error('Error getting tokens:', error);
       return { accessToken: null, refreshToken: null, idToken: null };
     }
   }
@@ -55,7 +56,7 @@ class SecureStorageService {
     try {
       return await SecureStore.getItemAsync(KEYS.ACCESS_TOKEN);
     } catch (error) {
-      console.error('Error getting access token:', error);
+      logger.error('Error getting access token:', error);
       return null;
     }
   }
@@ -67,7 +68,7 @@ class SecureStorageService {
     try {
       return await SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
     } catch (error) {
-      console.error('Error getting refresh token:', error);
+      logger.error('Error getting refresh token:', error);
       return null;
     }
   }
@@ -82,7 +83,7 @@ class SecureStorageService {
       await SecureStore.deleteItemAsync(KEYS.ID_TOKEN);
       await SecureStore.deleteItemAsync(KEYS.USER_ID);
     } catch (error) {
-      console.error('Error clearing tokens:', error);
+      logger.error('Error clearing tokens:', error);
       throw error;
     }
   }
@@ -94,7 +95,7 @@ class SecureStorageService {
     try {
       await SecureStore.setItemAsync(KEYS.USER_ID, userId);
     } catch (error) {
-      console.error('Error saving user ID:', error);
+      logger.error('Error saving user ID:', error);
       throw error;
     }
   }
@@ -106,7 +107,7 @@ class SecureStorageService {
     try {
       return await SecureStore.getItemAsync(KEYS.USER_ID);
     } catch (error) {
-      console.error('Error getting user ID:', error);
+      logger.error('Error getting user ID:', error);
       return null;
     }
   }

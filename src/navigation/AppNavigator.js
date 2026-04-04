@@ -1,6 +1,6 @@
 /**
  * App Navigator
- * 
+ *
  * Root navigation that switches between Auth and Main flows.
  */
 
@@ -11,6 +11,8 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/auth/LoginScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import PrivacyPolicyScreen from '../screens/settings/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/settings/TermsOfServiceScreen';
 import MainNavigator from './MainNavigator';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import Colors from '../constants/Colors';
@@ -32,24 +34,38 @@ const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
-          // Auth Flow
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen
+              name="PrivacyPolicy"
+              component={PrivacyPolicyScreen}
+              options={{ presentation: 'modal', headerShown: true, headerTitle: 'Privacy Policy', headerBackTitle: 'Back' }}
+            />
+            <Stack.Screen
+              name="TermsOfService"
+              component={TermsOfServiceScreen}
+              options={{ presentation: 'modal', headerShown: true, headerTitle: 'Terms of Service', headerBackTitle: 'Back' }}
+            />
+          </>
         ) : !user?.displayName ? (
-          // Profile Setup (first-time user)
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         ) : (
-          // Main App
           <>
             <Stack.Screen name="Main" component={MainNavigator} />
-            <Stack.Screen 
-              name="Profile" 
+            <Stack.Screen
+              name="Profile"
               component={ProfileScreen}
-              options={{
-                presentation: 'modal',
-                headerShown: true,
-                headerTitle: 'Profile',
-                headerBackTitle: 'Back',
-              }}
+              options={{ presentation: 'modal', headerShown: true, headerTitle: 'Profile', headerBackTitle: 'Back' }}
+            />
+            <Stack.Screen
+              name="PrivacyPolicy"
+              component={PrivacyPolicyScreen}
+              options={{ presentation: 'modal', headerShown: true, headerTitle: 'Privacy Policy', headerBackTitle: 'Back' }}
+            />
+            <Stack.Screen
+              name="TermsOfService"
+              component={TermsOfServiceScreen}
+              options={{ presentation: 'modal', headerShown: true, headerTitle: 'Terms of Service', headerBackTitle: 'Back' }}
             />
           </>
         )}

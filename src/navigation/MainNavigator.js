@@ -7,6 +7,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import OfflineBanner from '../components/OfflineBanner';
+import logger from '../services/utils/logger';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { messageApi } from '../services/api/messageApi';
@@ -172,12 +174,14 @@ const MainNavigator = () => {
         setUnreadMessageCount(totalUnread);
       }
     } catch (error) {
-      console.error('Error loading unread count:', error);
+      logger.warn('Error loading unread count:', error.message);
     }
   };
 
   return (
-    <Tab.Navigator
+    <View style={{ flex: 1 }}>
+      <OfflineBanner />
+      <Tab.Navigator
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -267,32 +271,8 @@ const MainNavigator = () => {
         }}
       />
     </Tab.Navigator>
-  );
-};
-
-
-// Placeholder screen for tabs not yet implemented
-const PlaceholderScreen = () => {
-  const { View, Text, StyleSheet } = require('react-native');
-  
-  return (
-    <View style={placeholderStyles.container}>
-      <Text style={placeholderStyles.text}>Coming Soon! 🚀</Text>
     </View>
   );
-};
-
-const placeholderStyles = {
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-  },
-  text: {
-    fontSize: Layout.fontSize.xl,
-    color: Colors.textSecondary,
-  },
 };
 
 const tabBadgeStyles = StyleSheet.create({

@@ -5,7 +5,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import logger from '../../services/utils/logger';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,7 +42,7 @@ const HomeScreen = ({ navigation }) => {
         )
       );
     } catch (error) {
-      console.error('Error celebrating milestone:', error);
+      logger.error('Error celebrating milestone:', error);
     }
   };
 
@@ -57,9 +58,9 @@ const HomeScreen = ({ navigation }) => {
         );
       }
     } catch (error) {
-      console.error('Error sending nudge:', error);
+      logger.error('Error sending nudge:', error);
       if (error.response?.data?.message) {
-        alert(error.response.data.message);
+        Alert.alert('Error', error.response.data.message);
       }
     }
   };
@@ -80,14 +81,14 @@ const HomeScreen = ({ navigation }) => {
 
       // Fetch progress (level, XP)
       const progressData = await progressApi.getPlayerProgress();
-      console.log('HomeScreen - Progress data:', progressData);
+      logger.debug('HomeScreen - Progress data:', progressData);
       if (progressData?.currentLevel !== undefined) {
         setLevel(progressData.currentLevel);
       }
 
       // Fetch streak data
       const streakData = await progressApi.getStreakData();
-      console.log('HomeScreen - Streak data:', streakData);
+      logger.debug('HomeScreen - Streak data:', streakData);
       // Handle null streak (user hasn't started a streak yet)
       if (streakData === null) {
         setStreak(0);
@@ -95,7 +96,7 @@ const HomeScreen = ({ navigation }) => {
         setStreak(streakData.currentStreak);
       }
     } catch (error) {
-      console.error('Error fetching user stats:', error);
+      logger.error('Error fetching user stats:', error);
       setStatsError('Failed to load stats');
     } finally {
       setStatsLoading(false);
@@ -123,7 +124,7 @@ const HomeScreen = ({ navigation }) => {
       
       setMilestones(transformedMilestones);
     } catch (error) {
-      console.error('Error fetching team milestones:', error);
+      logger.error('Error fetching team milestones:', error);
     } finally {
       setMilestonesLoading(false);
     }
@@ -148,7 +149,7 @@ const HomeScreen = ({ navigation }) => {
       
       setIncomplete(transformedIncomplete);
     } catch (error) {
-      console.error('Error fetching incomplete assignments:', error);
+      logger.error('Error fetching incomplete assignments:', error);
     } finally {
       setIncompleteLoading(false);
     }
@@ -160,7 +161,7 @@ const HomeScreen = ({ navigation }) => {
       const teamsData = await teamApi.getTeams();
       setTeams(teamsData.teams || []);
     } catch (error) {
-      console.error('Error fetching user teams:', error);
+      logger.error('Error fetching user teams:', error);
     } finally {
       setTeamsLoading(false);
     }
@@ -177,7 +178,7 @@ const HomeScreen = ({ navigation }) => {
         fetchUserTeams()
       ]);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      logger.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
     }

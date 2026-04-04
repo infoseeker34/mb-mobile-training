@@ -5,14 +5,37 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import userApi from '../../services/api/userApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await userApi.deleteAccount();
+              await logout();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete account. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -71,12 +94,17 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.settingLabel}>Notifications</Text>
             <Text style={styles.settingValue}>Coming Soon →</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Privacy</Text>
-            <Text style={styles.settingValue}>Coming Soon →</Text>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => navigation.navigate('PrivacyPolicy')}>
+            <Text style={styles.settingLabel}>Privacy Policy</Text>
+            <Text style={styles.settingArrow}>→</Text>
           </TouchableOpacity>
-          
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => navigation.navigate('TermsOfService')}>
+            <Text style={styles.settingLabel}>Terms of Service</Text>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.settingItem}>
             <Text style={styles.settingLabel}>Help & Support</Text>
             <Text style={styles.settingValue}>Coming Soon →</Text>
@@ -86,6 +114,11 @@ const ProfileScreen = ({ navigation }) => {
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={logout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account Button */}
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+          <Text style={styles.deleteButtonText}>Delete Account</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -206,7 +239,8 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.sm,
     color: Colors.textSecondary,
   },
-  
+  settingArrow: { fontSize: 14, color: '#4b5563' },
+
   // Logout Button
   logoutButton: {
     backgroundColor: Colors.error,
@@ -222,6 +256,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textInverse,
   },
+  deleteButton: {
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  deleteButtonText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
 });
 
 export default ProfileScreen;
