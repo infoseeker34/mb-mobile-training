@@ -4,10 +4,18 @@
  * Calendar view showing all training sessions and team events.
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import assignmentApi from '../../services/api/assignmentApi';
@@ -542,49 +550,53 @@ const CalendarScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Calendar</Text>
-            <Text style={styles.headerSubtitle}>{currentMonth}</Text>
-          </View>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              disabled={refreshing}
-            >
-              <Ionicons 
-                name="refresh" 
-                size={20} 
-                color={refreshing ? Colors.textTertiary : Colors.primary} 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, hasActiveFilters && styles.filterButtonActive]}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <Ionicons 
-                name={showFilters ? 'close' : 'filter'} 
-                size={16} 
-                color={hasActiveFilters ? Colors.white : Colors.text} 
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.filterButtonText, hasActiveFilters && { color: Colors.white }]}>
-                Filter
-              </Text>
-              {hasActiveFilters && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>
-                    {filters.eventTypes.length + filters.teams.length + (filters.dateStart !== 'today' ? 1 : 0)}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryLight, Colors.background]}
+        locations={[0, 0.3, 1]}
+        style={styles.gradient}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.headerTitle}>Calendar</Text>
+              <Text style={styles.headerSubtitle}>{currentMonth}</Text>
+            </View>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={handleRefresh}
+                disabled={refreshing}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={refreshing ? 'rgba(255, 255, 255, 0.7)' : Colors.white}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.headerFilterButton, hasActiveFilters && styles.headerFilterButtonActive]}
+                onPress={() => setShowFilters(!showFilters)}
+              >
+                <Ionicons
+                  name={showFilters ? 'close' : 'filter'}
+                  size={16}
+                  color={Colors.white}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.headerFilterButtonText}>Filter</Text>
+                {hasActiveFilters && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>
+                      {filters.eventTypes.length + filters.teams.length + (filters.dateStart !== 'today' ? 1 : 0)}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {renderFilterPanel()}
 
@@ -626,7 +638,7 @@ const CalendarScreen = ({ navigation }) => {
         
         <View style={styles.bottomPadding} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -635,9 +647,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  gradient: {
+    paddingTop: 60,
+    paddingBottom: Layout.spacing.md,
+  },
   header: {
     paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.lg,
+    paddingTop: 0,
     paddingBottom: Layout.spacing.md,
   },
   headerTop: {
@@ -652,7 +668,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    color: Colors.text,
     marginTop: Layout.spacing.xs,
   },
   
@@ -662,34 +678,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Layout.spacing.sm,
   },
-  refreshButton: {
+  headerIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
-  filterButton: {
+  headerFilterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     paddingHorizontal: Layout.spacing.md,
     paddingVertical: Layout.spacing.sm,
     borderRadius: Layout.borderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
-  filterButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  headerFilterButtonActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderColor: 'rgba(255, 255, 255, 0.36)',
   },
-  filterButtonText: {
+  headerFilterButtonText: {
     fontSize: Layout.fontSize.sm,
     fontWeight: '600',
-    color: Colors.text,
+    color: Colors.white,
   },
   filterBadge: {
     backgroundColor: Colors.error,

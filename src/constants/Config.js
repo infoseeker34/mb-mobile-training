@@ -20,7 +20,7 @@ export const COGNITO_CONFIG = {
 
 // App Settings
 export const APP_CONFIG = {
-  appName: 'Magic Board Training',
+  appName: 'Steamers Crew Training',
   version: '1.0.0',
   
   // Pagination

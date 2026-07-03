@@ -8,14 +8,15 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { messageApi } from '../../services/api/messageApi';
 import teamApi from '../../services/api/teamApi';
 import { organizationApi } from '../../services/api/organizationApi';
 import Colors from '../../constants/Colors';
+import Layout from '../../constants/Layout';
 
 const ConversationListScreen = ({ navigation }) => {
   const [conversations, setConversations] = useState([]);
@@ -149,31 +150,37 @@ const ConversationListScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('Invitations')}
-          >
-            <View>
-              <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
-              {pendingInvitationsCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{pendingInvitationsCount}</Text>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('ComposeMessage', { teams, organizations, recipients })}
-          >
-            <Ionicons name="create-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryLight, Colors.background]}
+        locations={[0, 0.3, 1]}
+        style={styles.gradient}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Invitations')}
+            >
+              <View>
+                <Ionicons name="notifications-outline" size={22} color={Colors.white} />
+                {pendingInvitationsCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{pendingInvitationsCount}</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('ComposeMessage', { teams, organizations, recipients })}
+            >
+              <Ionicons name="create-outline" size={22} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {conversations.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -199,7 +206,7 @@ const ConversationListScreen = ({ navigation }) => {
           contentContainerStyle={styles.listContent}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -208,26 +215,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  gradient: {
+    paddingTop: 60,
+    paddingBottom: Layout.spacing.md,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: Layout.spacing.lg,
+    paddingBottom: Layout.spacing.md,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.text,
+    fontSize: Layout.fontSize.xxxl,
+    fontWeight: 'bold',
+    color: Colors.white,
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Layout.spacing.sm,
   },
-  headerButton: {
-    padding: 8,
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   badge: {
     position: 'absolute',

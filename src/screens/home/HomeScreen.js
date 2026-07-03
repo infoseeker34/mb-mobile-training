@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -327,9 +327,18 @@ const HomeScreen = ({ navigation }) => {
         {/* Header */}
         <View style={styles.headerContainer}>
           <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Welcome back,</Text>
-              <Text style={styles.userName}>{user?.displayName || 'Athlete'}! 👋</Text>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerLogoWrapper}>
+                <Image
+                  source={{ uri: 'https://lirp.cdn-website.com/9b281fe3/dms3rep/multi/opt/Image+%2811%29-1920w.png' }}
+                  style={styles.headerLogo}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={styles.headerGreetingBlock}>
+                <Text style={styles.greeting}>Welcome back,</Text>
+                <Text style={styles.userName}>{user?.displayName || 'Athlete'}! 👋</Text>
+              </View>
             </View>
             <TouchableOpacity 
               style={styles.profileButton}
@@ -447,21 +456,21 @@ const styles = StyleSheet.create({
   },
   gradient: {
     paddingTop: 60,
-    paddingBottom: Layout.spacing.xl,
+    paddingBottom: Layout.spacing.md,
   },
   headerContainer: {
     paddingHorizontal: Layout.spacing.lg,
   },
   scrollView: {
     flex: 1,
-    marginTop: -20,
+    marginTop: -12,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     backgroundColor: Colors.background,
   },
   scrollContent: {
     padding: Layout.spacing.lg,
-    paddingTop: Layout.spacing.xl,
+    paddingTop: Layout.spacing.md,
   },
   
   // Header
@@ -470,24 +479,50 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerGreetingBlock: {
+    flex: 1,
+  },
+  headerLogoWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Layout.spacing.md,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+  },
   greeting: {
     fontSize: Layout.fontSize.md,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
   },
   userName: {
-    fontSize: Layout.fontSize.xxxl,
+    fontSize: Layout.fontSize.xxl,
     fontWeight: 'bold',
     color: Colors.white,
-    marginTop: 4,
+    marginTop: 2,
   },
   profileButton: {
-    marginTop: 4,
+    marginTop: 2,
   },
   profileAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.4)',
@@ -501,13 +536,13 @@ const styles = StyleSheet.create({
   
   // Stats
   statsContainer: {
-    marginBottom: Layout.spacing.xl,
+    marginBottom: Layout.spacing.lg,
   },
   combinedStatCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    padding: Layout.spacing.lg,
+    padding: Layout.spacing.md,
     borderRadius: 16,
     marginBottom: Layout.spacing.md,
     shadowColor: Colors.shadow,
@@ -523,13 +558,13 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    height: 56,
+    height: 48,
     backgroundColor: Colors.border,
     marginHorizontal: Layout.spacing.md,
   },
   statIconContainer: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',

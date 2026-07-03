@@ -599,28 +599,28 @@ const MessagesScreen = ({ navigation }) => {
             style={[styles.tabButton, activeTab === 'teams' && styles.tabButtonActive]}
             onPress={() => setActiveTab('teams')}
           >
-            <Ionicons name="people" size={20} color={activeTab === 'teams' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Ionicons name="people" size={20} color={activeTab === 'teams' ? Colors.white : 'rgba(255,255,255,0.8)'} />
             <Text style={[styles.tabButtonText, activeTab === 'teams' && styles.tabButtonTextActive]}>Teams</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'organizations' && styles.tabButtonActive]}
             onPress={() => setActiveTab('organizations')}
           >
-            <Ionicons name="business" size={20} color={activeTab === 'organizations' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Ionicons name="business" size={20} color={activeTab === 'organizations' ? Colors.white : 'rgba(255,255,255,0.8)'} />
             <Text style={[styles.tabButtonText, activeTab === 'organizations' && styles.tabButtonTextActive]}>Orgs</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'direct' && styles.tabButtonActive]}
             onPress={() => setActiveTab('direct')}
           >
-            <Ionicons name="mail" size={20} color={activeTab === 'direct' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Ionicons name="mail" size={20} color={activeTab === 'direct' ? Colors.white : 'rgba(255,255,255,0.8)'} />
             <Text style={[styles.tabButtonText, activeTab === 'direct' && styles.tabButtonTextActive]}>Direct</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'notifications' && styles.tabButtonActive]}
             onPress={() => setActiveTab('notifications')}
           >
-            <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? Colors.white : 'rgba(255,255,255,0.7)'} />
+            <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? Colors.white : 'rgba(255,255,255,0.8)'} />
             <Text style={[styles.tabButtonText, activeTab === 'notifications' && styles.tabButtonTextActive]}>Alerts</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>

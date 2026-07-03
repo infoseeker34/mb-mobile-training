@@ -7,9 +7,9 @@
 
 const palette = {
   // Primary Brand Colors
-  primary: '#6366f1',      // Indigo - main brand color
-  primaryDark: '#4f46e5',  // Darker indigo for pressed states
-  primaryLight: '#818cf8', // Lighter indigo for backgrounds
+  primary: '#0b3d91',      // Steamers blue - main brand color
+  primaryDark: '#08306f',  // Darker blue for pressed states
+  primaryLight: '#145da0', // Lighter blue for backgrounds
   
   // Secondary Colors
   secondary: '#10b981',    // Green - success, achievements
@@ -42,8 +42,8 @@ const palette = {
   gray900: '#111827',
   
   // XP/Level Colors (gradient)
-  xpStart: '#6366f1',      // Indigo
-  xpEnd: '#8b5cf6',        // Purple
+  xpStart: '#0b3d91',      // Steamers blue
+  xpEnd: '#145da0',        // Lighter blue
   
   // Streak Fire Colors
   streakOrange: '#f97316',
@@ -58,6 +58,9 @@ export default {
   primaryLight: palette.primaryLight,
   secondary: palette.secondary,
   accent: palette.accent,
+
+  white: palette.white,
+  black: palette.black,
   
   // UI Elements
   background: palette.white,

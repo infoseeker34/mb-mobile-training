@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -187,6 +187,7 @@ const MainNavigator = () => {
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        headerTitleAlign: 'center',
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: {
@@ -211,7 +212,7 @@ const MainNavigator = () => {
               color={color} 
             />
           ),
-          headerTitle: 'Magic Board Training',
+          headerShown: false,
         }}
       />
       
@@ -312,6 +313,31 @@ const tabBadgeStyles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+});
+
+const headerTitleStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 22,
+    height: 22,
+  },
+  text: {
+    color: Colors.textInverse,
+    fontWeight: 'bold',
+    fontSize: Layout.fontSize.md,
   },
 });
 

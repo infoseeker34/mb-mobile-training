@@ -396,7 +396,7 @@ const TrainingScreen = ({ navigation }) => {
         <Ionicons 
           name="compass" 
           size={18} 
-          color={activeTab === 'browse' ? Colors.white : Colors.textSecondary} 
+          color={activeTab === 'browse' ? '#ffffff' : Colors.text} 
           style={styles.segmentIcon}
         />
         <Text style={[styles.segmentText, activeTab === 'browse' && styles.activeSegmentText]}>
@@ -414,7 +414,7 @@ const TrainingScreen = ({ navigation }) => {
         <Ionicons 
           name="time" 
           size={18} 
-          color={activeTab === 'history' ? Colors.white : Colors.textSecondary} 
+          color={activeTab === 'history' ? '#ffffff' : Colors.text} 
           style={styles.segmentIcon}
         />
         <Text style={[styles.segmentText, activeTab === 'history' && styles.activeSegmentText]}>
@@ -432,7 +432,7 @@ const TrainingScreen = ({ navigation }) => {
         <Ionicons 
           name="stats-chart" 
           size={18} 
-          color={activeTab === 'progress' ? Colors.white : Colors.textSecondary} 
+          color={activeTab === 'progress' ? '#ffffff' : Colors.text} 
           style={styles.segmentIcon}
         />
         <Text style={[styles.segmentText, activeTab === 'progress' && styles.activeSegmentText]}>
@@ -969,11 +969,11 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontSize: Layout.fontSize.sm,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: Colors.text,
     fontWeight: '600',
   },
   activeSegmentText: {
-    color: Colors.white,
+    color: '#ffffff',
   },
   
   // Content Wrapper

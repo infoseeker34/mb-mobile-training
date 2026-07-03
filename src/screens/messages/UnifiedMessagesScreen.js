@@ -425,11 +425,11 @@ const UnifiedMessagesScreen = ({ navigation }) => {
 
   const getContextBadge = (msg) => {
     if (msg.context_type === 'organization') {
-      return { icon: '🏢', label: 'Org', color: Colors.purple };
+      return { icon: '🏢', label: 'Org', color: Colors.primary };
     } else if (msg.context_type === 'direct') {
-      return { icon: '💬', label: 'DM', color: Colors.green };
+      return { icon: '💬', label: 'DM', color: Colors.info };
     } else {
-      return { icon: '👥', label: 'Team', color: Colors.blue };
+      return { icon: '👥', label: 'Team', color: Colors.accent };
     }
   };
 

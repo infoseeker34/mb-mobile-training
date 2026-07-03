@@ -20,47 +20,36 @@ const LoginScreen = () => {
       <View style={styles.content}>
         {/* Logo/Brand Section */}
         <View style={styles.brandSection}>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>⚡</Text>
+          <View style={styles.logoWrapper}>
+            <Image
+              source={{ uri: 'https://lirp.cdn-website.com/9b281fe3/dms3rep/multi/opt/Image+%2811%29-1920w.png' }}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={styles.title}>Magic Board Training</Text>
+          <Text style={styles.title}>Steamers Crew Training</Text>
           <Text style={styles.subtitle}>
-            Level up your skills with personalized training programs
+            Level up!
           </Text>
-        </View>
-
-        {/* Features List */}
-        <View style={styles.featuresSection}>
-          <FeatureItem icon="🎯" text="Browse training plans" />
-          <FeatureItem icon="📊" text="Track your progress" />
-          <FeatureItem icon="🏆" text="Earn achievements" />
-          <FeatureItem icon="🔥" text="Build training streaks" />
         </View>
 
         {/* Login Button */}
         <View style={styles.buttonSection}>
           <Button
-            title="Login with Magic Board"
+            title="Login to Steamers Crew Training"
             onPress={login}
             loading={isLoading}
             size="lg"
             style={styles.loginButton}
           />
           <Text style={styles.helpText}>
-            Use your Magic Board account to sign in
+            Use your Steamers Crew Training account to sign in
           </Text>
         </View>
       </View>
     </SafeAreaView>
   );
 };
-
-const FeatureItem = ({ icon, text }) => (
-  <View style={styles.featureItem}>
-    <Text style={styles.featureIcon}>{icon}</Text>
-    <Text style={styles.featureText}>{text}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -79,17 +68,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: Layout.spacing.xxl,
   },
-  logoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: Layout.borderRadius.xl,
-    backgroundColor: Colors.primary,
+  logoWrapper: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Layout.spacing.lg,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  logoText: {
-    fontSize: 48,
+  logo: {
+    width: 78,
+    height: 78,
   },
   title: {
     fontSize: Layout.fontSize.xxxl,
@@ -103,25 +98,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Layout.spacing.lg,
-  },
-  
-  // Features Section
-  featuresSection: {
-    marginVertical: Layout.spacing.xl,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.md,
-    paddingVertical: Layout.spacing.sm,
-  },
-  featureIcon: {
-    fontSize: Layout.fontSize.xxl,
-    marginRight: Layout.spacing.md,
-  },
-  featureText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.text,
   },
   
   // Button Section
