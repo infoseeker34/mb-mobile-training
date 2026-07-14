@@ -46,6 +46,32 @@ class UserApi {
     const response = await apiClient.get('/api/users/me/organizations');
     return response.data;
   }
+
+  /**
+   * Add an athlete profile under the authenticated (parent) account.
+   * Athletes never get their own login - see GET /api/users/me's
+   * `athletes` array for the full list.
+   */
+  async addAthlete(athleteData) {
+    const response = await apiClient.post('/api/users/me/athletes', athleteData);
+    return response.data;
+  }
+
+  /**
+   * Update an athlete profile owned by the authenticated account
+   */
+  async updateAthlete(athleteId, athleteData) {
+    const response = await apiClient.put(`/api/users/me/athletes/${athleteId}`, athleteData);
+    return response.data;
+  }
+
+  /**
+   * Remove an athlete profile owned by the authenticated account
+   */
+  async deleteAthlete(athleteId) {
+    const response = await apiClient.delete(`/api/users/me/athletes/${athleteId}`);
+    return response.data;
+  }
 }
 
 export default new UserApi();

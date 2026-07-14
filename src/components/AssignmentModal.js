@@ -16,6 +16,24 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Colors from '../constants/Colors';
 import Layout from '../constants/Layout';
 
+// yyyy-mm-dd in local time, as required by <input type="date">
+const toDateInputValue = (date) => {
+  if (!date) return '';
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 10);
+};
+
+const webDateInputStyle = {
+  padding: Layout.spacing.md,
+  borderRadius: Layout.borderRadius.md,
+  border: `1px solid ${Colors.border}`,
+  fontSize: Layout.fontSize.md,
+  color: Colors.text,
+  backgroundColor: Colors.background,
+  width: '100%',
+  boxSizing: 'border-box',
+};
+
 const AssignmentModal = ({
   visible,
   onClose,
@@ -226,13 +244,22 @@ const AssignmentModal = ({
             {/* Start Date */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Start Date</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowStartPicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
-                <Text style={styles.dateButtonText}>{formatDate(startDate)}</Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <input
+                  type="date"
+                  value={toDateInputValue(startDate)}
+                  onChange={(e) => e.target.value && setStartDate(new Date(e.target.value))}
+                  style={webDateInputStyle}
+                />
+              ) : (
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowStartPicker(true)}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                  <Text style={styles.dateButtonText}>{formatDate(startDate)}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* End Date Toggle */}
@@ -254,13 +281,23 @@ const AssignmentModal = ({
                 </TouchableOpacity>
               </View>
               {hasEndDate && (
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowEndPicker(true)}
-                >
-                  <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
-                  <Text style={styles.dateButtonText}>{formatDate(endDate)}</Text>
-                </TouchableOpacity>
+                Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={toDateInputValue(endDate)}
+                    onChange={(e) => e.target.value && setEndDate(new Date(e.target.value))}
+                    min={toDateInputValue(startDate)}
+                    style={webDateInputStyle}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowEndPicker(true)}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.dateButtonText}>{formatDate(endDate)}</Text>
+                  </TouchableOpacity>
+                )
               )}
             </View>
 

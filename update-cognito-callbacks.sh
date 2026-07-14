@@ -24,8 +24,8 @@ echo "Updating callback URLs..."
 aws cognito-idp update-user-pool-client \
   --user-pool-id "$USER_POOL_ID" \
   --client-id "$CLIENT_ID" \
-  --callback-urls '["http://localhost:3001/auth/callback","mbtraining://auth"]' \
-  --logout-urls '["http://localhost:3001","mbtraining://"]' \
+  --callback-urls '["http://localhost:8081/auth/callback","mbtraining://auth"]' \
+  --logout-urls '["http://localhost:8081","mbtraining://"]' \
   --allowed-o-auth-flows "code" \
   --allowed-o-auth-scopes "openid" "email" "profile" \
   --allowed-o-auth-flows-user-pool-client \
@@ -37,11 +37,11 @@ if [ $? -eq 0 ]; then
   echo "✅ Cognito User Pool Client updated successfully!"
   echo ""
   echo "Callback URLs now include:"
-  echo "  - http://localhost:3001/auth/callback (web)"
+  echo "  - http://localhost:8081/auth/callback (web)"
   echo "  - mbtraining://auth (mobile)"
   echo ""
   echo "Logout URLs now include:"
-  echo "  - http://localhost:3001 (web)"
+  echo "  - http://localhost:8081 (web)"
   echo "  - mbtraining:// (mobile)"
   echo ""
   echo "🚀 You can now test the mobile app OAuth flow!"

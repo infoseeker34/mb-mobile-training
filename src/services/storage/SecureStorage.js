@@ -1,12 +1,31 @@
 /**
  * Secure Storage Service
- * 
+ *
  * Handles secure storage of sensitive data (tokens) using Expo SecureStore.
  * On iOS: Uses Keychain
  * On Android: Uses EncryptedSharedPreferences
+ * On web: expo-secure-store has no native keychain to back it, so we fall
+ * back to localStorage. This is not encrypted at rest - fine for local dev
+ * preview, but browsers have no OS-level secure storage equivalent, so this
+ * is not a production-grade solution for a web deployment.
  */
 
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+
+const webStorage = {
+  async setItemAsync(key, value) {
+    window.localStorage.setItem(key, value);
+  },
+  async getItemAsync(key) {
+    return window.localStorage.getItem(key);
+  },
+  async deleteItemAsync(key) {
+    window.localStorage.removeItem(key);
+  },
+};
+
+const storage = Platform.OS === 'web' ? webStorage : SecureStore;
 
 const KEYS = {
   ACCESS_TOKEN: 'access_token',
@@ -21,10 +40,10 @@ class SecureStorageService {
    */
   async saveTokens(accessToken, refreshToken, idToken) {
     try {
-      await SecureStore.setItemAsync(KEYS.ACCESS_TOKEN, accessToken);
-      await SecureStore.setItemAsync(KEYS.REFRESH_TOKEN, refreshToken);
+      await storage.setItemAsync(KEYS.ACCESS_TOKEN, accessToken);
+      await storage.setItemAsync(KEYS.REFRESH_TOKEN, refreshToken);
       if (idToken) {
-        await SecureStore.setItemAsync(KEYS.ID_TOKEN, idToken);
+        await storage.setItemAsync(KEYS.ID_TOKEN, idToken);
       }
     } catch (error) {
       console.error('Error saving tokens:', error);
@@ -37,9 +56,9 @@ class SecureStorageService {
    */
   async getTokens() {
     try {
-      const accessToken = await SecureStore.getItemAsync(KEYS.ACCESS_TOKEN);
-      const refreshToken = await SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
-      const idToken = await SecureStore.getItemAsync(KEYS.ID_TOKEN);
+      const accessToken = await storage.getItemAsync(KEYS.ACCESS_TOKEN);
+      const refreshToken = await storage.getItemAsync(KEYS.REFRESH_TOKEN);
+      const idToken = await storage.getItemAsync(KEYS.ID_TOKEN);
       
       return { accessToken, refreshToken, idToken };
     } catch (error) {
@@ -53,7 +72,7 @@ class SecureStorageService {
    */
   async getAccessToken() {
     try {
-      return await SecureStore.getItemAsync(KEYS.ACCESS_TOKEN);
+      return await storage.getItemAsync(KEYS.ACCESS_TOKEN);
     } catch (error) {
       console.error('Error getting access token:', error);
       return null;
@@ -65,7 +84,7 @@ class SecureStorageService {
    */
   async getRefreshToken() {
     try {
-      return await SecureStore.getItemAsync(KEYS.REFRESH_TOKEN);
+      return await storage.getItemAsync(KEYS.REFRESH_TOKEN);
     } catch (error) {
       console.error('Error getting refresh token:', error);
       return null;
@@ -77,10 +96,10 @@ class SecureStorageService {
    */
   async clearTokens() {
     try {
-      await SecureStore.deleteItemAsync(KEYS.ACCESS_TOKEN);
-      await SecureStore.deleteItemAsync(KEYS.REFRESH_TOKEN);
-      await SecureStore.deleteItemAsync(KEYS.ID_TOKEN);
-      await SecureStore.deleteItemAsync(KEYS.USER_ID);
+      await storage.deleteItemAsync(KEYS.ACCESS_TOKEN);
+      await storage.deleteItemAsync(KEYS.REFRESH_TOKEN);
+      await storage.deleteItemAsync(KEYS.ID_TOKEN);
+      await storage.deleteItemAsync(KEYS.USER_ID);
     } catch (error) {
       console.error('Error clearing tokens:', error);
       throw error;
@@ -92,7 +111,7 @@ class SecureStorageService {
    */
   async saveUserId(userId) {
     try {
-      await SecureStore.setItemAsync(KEYS.USER_ID, userId);
+      await storage.setItemAsync(KEYS.USER_ID, userId);
     } catch (error) {
       console.error('Error saving user ID:', error);
       throw error;
@@ -104,7 +123,7 @@ class SecureStorageService {
    */
   async getUserId() {
     try {
-      return await SecureStore.getItemAsync(KEYS.USER_ID);
+      return await storage.getItemAsync(KEYS.USER_ID);
     } catch (error) {
       console.error('Error getting user ID:', error);
       return null;

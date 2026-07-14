@@ -13,7 +13,7 @@ import Button from '../../components/common/Button';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
-const ProfileSetupScreen = () => {
+const ProfileSetupScreen = ({ accountType, termsAccepted, policyVersion }) => {
   const { user, checkAuthStatus } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -79,6 +79,9 @@ const ProfileSetupScreen = () => {
         dateOfBirth: isoDate,
         gender: gender,
         phoneNumber: phoneNumber || undefined,
+        accountType,
+        termsAccepted,
+        policyVersion,
       };
 
       console.log('Profile data being sent:', profileData);
