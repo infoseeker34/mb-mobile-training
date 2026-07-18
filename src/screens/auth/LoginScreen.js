@@ -12,7 +12,7 @@ import Button from '../../components/common/Button';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
-const LoginScreen = () => {
+const LoginScreen = ({ navigation }) => {
   const { login, isLoading } = useAuth();
 
   return (
@@ -45,6 +45,13 @@ const LoginScreen = () => {
           <Text style={styles.helpText}>
             Use your Steamers Crew Training account to sign in
           </Text>
+          <Button
+            title="Create an Account"
+            onPress={() => navigation.navigate('SignUp')}
+            variant="outline"
+            size="lg"
+            style={styles.signUpButton}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -107,6 +114,10 @@ const styles = StyleSheet.create({
   loginButton: {
     width: '100%',
     marginBottom: Layout.spacing.md,
+  },
+  signUpButton: {
+    width: '100%',
+    marginTop: Layout.spacing.md,
   },
   helpText: {
     fontSize: Layout.fontSize.sm,

@@ -9,6 +9,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/auth/LoginScreen';
+import SignUpScreen from '../screens/auth/SignUpScreen';
+import VerifyEmailScreen from '../screens/auth/VerifyEmailScreen';
 import AccountTypeScreen from '../screens/auth/AccountTypeScreen';
 import ConsentScreen from '../screens/auth/ConsentScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
@@ -61,8 +63,14 @@ const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
-          // Auth Flow
-          <Stack.Screen name="Login" component={LoginScreen} />
+          // Auth Flow - Login/SignUp/VerifyEmail are siblings (unlike the
+          // onboarding steps below) since a user may go back and forth
+          // between them before authenticating.
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+          </>
         ) : needsAccountType ? (
           <Stack.Screen name="AccountType">
             {() => <AccountTypeScreen onChoose={setPendingAccountType} />}
