@@ -4,15 +4,35 @@
  * User profile with settings and logout.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import organizationApi from '../../services/api/organizationApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
+  const [organizations, setOrganizations] = useState([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const result = await organizationApi.getOrganizations();
+        if (mounted) setOrganizations(result?.data?.organizations || []);
+      } catch (error) {
+        // Non-fatal — the section just renders empty if the fetch fails.
+      } finally {
+        if (mounted) setOrgsLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -61,6 +81,44 @@ const ProfileScreen = ({ navigation }) => {
             <InfoRow label="Member Since" value={formatDate(user?.createdAt)} />
             <InfoRow label="Last Login" value={formatDate(user?.lastLogin)} />
           </View>
+        </View>
+
+        {/* Organizations */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Organizations</Text>
+          {orgsLoading ? (
+            <ActivityIndicator color={Colors.primary} />
+          ) : organizations.length === 0 ? (
+            <View style={styles.infoCard}>
+              <Text style={styles.infoValue}>No organizations yet.</Text>
+            </View>
+          ) : (
+            organizations.map((org) => (
+              <View key={org.id} style={styles.orgCard}>
+                <View style={styles.orgHeaderRow}>
+                  <Text style={styles.orgName}>{org.name}</Text>
+                  <View
+                    style={[
+                      styles.tenancyBadge,
+                      org.tenancy_type === 'enterprise' ? styles.tenancyEnterprise : styles.tenancyPersonal,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tenancyBadgeText,
+                        org.tenancy_type === 'enterprise' ? styles.tenancyEnterpriseText : styles.tenancyPersonalText,
+                      ]}
+                    >
+                      {org.tenancy_type === 'enterprise' ? 'Enterprise' : 'Personal'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.orgMeta}>
+                  {(org.member_count ?? 0)} members · {(org.team_count ?? 0)} teams
+                </Text>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Settings Placeholder */}
@@ -159,6 +217,57 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+
+  // Organization card
+  orgCard: {
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.md,
+    marginBottom: Layout.spacing.sm,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  orgHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  orgName: {
+    flex: 1,
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+    marginRight: Layout.spacing.sm,
+  },
+  orgMeta: {
+    marginTop: Layout.spacing.xs,
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  tenancyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  tenancyPersonal: {
+    backgroundColor: '#e5e7eb',
+  },
+  tenancyEnterprise: {
+    backgroundColor: '#dbeafe',
+  },
+  tenancyBadgeText: {
+    fontSize: Layout.fontSize.xs,
+    fontWeight: '600',
+  },
+  tenancyPersonalText: {
+    color: '#374151',
+  },
+  tenancyEnterpriseText: {
+    color: '#1e40af',
   },
   infoRow: {
     flexDirection: 'row',
