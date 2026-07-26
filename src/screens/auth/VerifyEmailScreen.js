@@ -37,8 +37,8 @@ const VerifyEmailScreen = ({ route, navigation }) => {
     try {
       await confirmSignUp(email, code.trim());
       setInfo('Account confirmed! Log in to continue.');
-      // Hosted-UI sign-in expects the "username" field to be filled with
-      // this same derived value (the email), so it just works here too.
+      // Now that the user is confirmed, the email alias is active, so the
+      // hosted-UI sign-in accepts the email directly - hand off to it.
       setTimeout(() => login(), 800);
     } catch (err) {
       setError(describeCognitoError(err));

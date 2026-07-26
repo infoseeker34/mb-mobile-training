@@ -4,16 +4,30 @@
  * scoped to a single app client - no AWS credentials or SDK needed, just the
  * client ID, so a plain fetch against the regional endpoint is enough.
  *
- * Username is always set to the user's email. The pool's UsernameAttributes
- * is empty (login by username, not email-as-alias), so without this the
- * hosted-UI sign-up form would ask for a separate, user-chosen username -
- * this keeps that identifier hidden and derived instead.
+ * The pool has `email` as an alias attribute, and an email alias only
+ * becomes active AFTER a user is confirmed. That governs every call here:
+ *  - SignUp: Cognito rejects an email-shaped Username ("Username cannot be
+ *    of email format, since user pool is configured for email alias"). So
+ *    deriveUsername() turns the email into a non-email-shaped opaque string
+ *    to serve as the literal username. The user never sees or chooses it.
+ *  - ConfirmSignUp / ResendConfirmationCode: these run while the user is
+ *    still UNCONFIRMED, so the email is NOT a resolvable alias yet - passing
+ *    it as Username makes Cognito fail the code check (surfacing as a bogus
+ *    CodeMismatch/ExpiredCode, NOT UserNotFound). They must use the same
+ *    literal derived username instead.
+ *  - Sign-in (the existing hosted-UI flow, not here): runs only AFTER
+ *    confirmation, when the email alias IS active, so it accepts the email
+ *    directly with no change needed.
  */
 
 import { COGNITO_CONFIG } from '../../constants/Config';
 
 const region = COGNITO_CONFIG.userPoolId.split('_')[0];
 const ENDPOINT = `https://cognito-idp.${region}.amazonaws.com/`;
+
+function deriveUsername(email) {
+  return email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
 
 async function cognitoRequest(target, body) {
   const response = await fetch(ENDPOINT, {
@@ -37,7 +51,7 @@ async function cognitoRequest(target, body) {
 export async function signUp(email, password) {
   return cognitoRequest('SignUp', {
     ClientId: COGNITO_CONFIG.clientId,
-    Username: email,
+    Username: deriveUsername(email),
     Password: password,
     UserAttributes: [{ Name: 'email', Value: email }],
   });
@@ -46,7 +60,7 @@ export async function signUp(email, password) {
 export async function confirmSignUp(email, code) {
   return cognitoRequest('ConfirmSignUp', {
     ClientId: COGNITO_CONFIG.clientId,
-    Username: email,
+    Username: deriveUsername(email),
     ConfirmationCode: code,
   });
 }
@@ -54,7 +68,7 @@ export async function confirmSignUp(email, code) {
 export async function resendConfirmationCode(email) {
   return cognitoRequest('ResendConfirmationCode', {
     ClientId: COGNITO_CONFIG.clientId,
-    Username: email,
+    Username: deriveUsername(email),
   });
 }
 
@@ -62,6 +76,7 @@ export async function resendConfirmationCode(email) {
 export function describeCognitoError(error) {
   switch (error.code) {
     case 'UsernameExistsException':
+    case 'AliasExistsException':
       return 'An account with this email already exists.';
     case 'InvalidPasswordException':
       return 'Password must be at least 8 characters and include an uppercase letter, lowercase letter, number, and symbol.';
