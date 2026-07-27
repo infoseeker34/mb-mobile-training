@@ -4,11 +4,29 @@
  * User profile with settings and logout.
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import organizationApi from '../../services/api/organizationApi';
+import teamApi from '../../services/api/teamApi';
+import {
+  PERSONAL_ORG_TEAM_LIMIT,
+  isPersonalOrg,
+  isPersonalOrgTeamLimitError,
+  getReportedTeamLimit,
+  buildTeamLimitAlert,
+} from '../../services/api/teamLimit';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -17,22 +35,86 @@ const ProfileScreen = ({ navigation }) => {
   const [organizations, setOrganizations] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
 
+  // Team-creation modal state (ORG-6)
+  const [createOrg, setCreateOrg] = useState(null);
+  const [teamName, setTeamName] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const loadOrganizations = useCallback(async () => {
+    try {
+      const result = await organizationApi.getOrganizations();
+      return result?.data?.organizations || [];
+    } catch (error) {
+      // Non-fatal — the section just renders empty if the fetch fails.
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
-      try {
-        const result = await organizationApi.getOrganizations();
-        if (mounted) setOrganizations(result?.data?.organizations || []);
-      } catch (error) {
-        // Non-fatal — the section just renders empty if the fetch fails.
-      } finally {
-        if (mounted) setOrgsLoading(false);
-      }
+      const orgs = await loadOrganizations();
+      if (mounted && orgs) setOrganizations(orgs);
+      if (mounted) setOrgsLoading(false);
     })();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loadOrganizations]);
+
+  const refreshOrganizations = useCallback(async () => {
+    const orgs = await loadOrganizations();
+    if (orgs) setOrganizations(orgs);
+  }, [loadOrganizations]);
+
+  // Personal orgs are capped; short-circuit with the friendly limit alert when
+  // the org is already at its limit, otherwise open the create-team modal.
+  const handleCreateTeamPress = (org) => {
+    if (isPersonalOrg(org) && (org.team_count ?? 0) >= PERSONAL_ORG_TEAM_LIMIT) {
+      const { title, message } = buildTeamLimitAlert(PERSONAL_ORG_TEAM_LIMIT);
+      Alert.alert(title, message);
+      return;
+    }
+    setTeamName('');
+    setCreateOrg(org);
+  };
+
+  const closeCreateModal = () => {
+    if (creating) return;
+    setCreateOrg(null);
+    setTeamName('');
+  };
+
+  const submitCreateTeam = async () => {
+    const name = teamName.trim();
+    if (!name) {
+      Alert.alert('Team name required', 'Please enter a name for the team.');
+      return;
+    }
+    if (!createOrg) return;
+
+    setCreating(true);
+    try {
+      await teamApi.createTeam(createOrg.id, { name });
+      setCreateOrg(null);
+      setTeamName('');
+      await refreshOrganizations();
+      Alert.alert('Team created', `"${name}" was created.`);
+    } catch (error) {
+      // Backend is the source of truth for the cap: handle its 403 even if the
+      // client's team_count was stale and let us open the modal.
+      if (isPersonalOrgTeamLimitError(error)) {
+        setCreateOrg(null);
+        setTeamName('');
+        const { title, message } = buildTeamLimitAlert(getReportedTeamLimit(error));
+        Alert.alert(title, message);
+      } else {
+        Alert.alert('Error', error?.message || 'Failed to create team');
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -93,31 +175,51 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.infoValue}>No organizations yet.</Text>
             </View>
           ) : (
-            organizations.map((org) => (
-              <View key={org.id} style={styles.orgCard}>
-                <View style={styles.orgHeaderRow}>
-                  <Text style={styles.orgName}>{org.name}</Text>
-                  <View
-                    style={[
-                      styles.tenancyBadge,
-                      org.tenancy_type === 'enterprise' ? styles.tenancyEnterprise : styles.tenancyPersonal,
-                    ]}
-                  >
-                    <Text
+            organizations.map((org) => {
+              const personal = isPersonalOrg(org);
+              const teamCount = org.team_count ?? 0;
+              const atLimit = personal && teamCount >= PERSONAL_ORG_TEAM_LIMIT;
+              const teamsLabel = personal
+                ? `${teamCount} of ${PERSONAL_ORG_TEAM_LIMIT} teams`
+                : `${teamCount} teams`;
+              return (
+                <View key={org.id} style={styles.orgCard}>
+                  <View style={styles.orgHeaderRow}>
+                    <Text style={styles.orgName}>{org.name}</Text>
+                    <View
                       style={[
-                        styles.tenancyBadgeText,
-                        org.tenancy_type === 'enterprise' ? styles.tenancyEnterpriseText : styles.tenancyPersonalText,
+                        styles.tenancyBadge,
+                        personal ? styles.tenancyPersonal : styles.tenancyEnterprise,
                       ]}
                     >
-                      {org.tenancy_type === 'enterprise' ? 'Enterprise' : 'Personal'}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.tenancyBadgeText,
+                          personal ? styles.tenancyPersonalText : styles.tenancyEnterpriseText,
+                        ]}
+                      >
+                        {personal ? 'Personal' : 'Enterprise'}
+                      </Text>
+                    </View>
                   </View>
+                  <Text style={styles.orgMeta}>
+                    {(org.member_count ?? 0)} members · {teamsLabel}
+                  </Text>
+                  {atLimit && (
+                    <Text style={styles.orgLimitNote}>
+                      Team limit reached — delete a team or upgrade to enterprise to add more.
+                    </Text>
+                  )}
+                  <TouchableOpacity
+                    style={styles.createTeamButton}
+                    onPress={() => handleCreateTeamPress(org)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.createTeamButtonText}>+ Create Team</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.orgMeta}>
-                  {(org.member_count ?? 0)} members · {(org.team_count ?? 0)} teams
-                </Text>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
 
@@ -146,6 +248,54 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Create Team modal (ORG-6) */}
+      <Modal
+        visible={createOrg !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCreateModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Create Team</Text>
+            <Text style={styles.modalSubtitle}>in {createOrg?.name}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Team name"
+              placeholderTextColor={Colors.textTertiary}
+              value={teamName}
+              onChangeText={setTeamName}
+              autoFocus
+              editable={!creating}
+              returnKeyType="done"
+              onSubmitEditing={submitCreateTeam}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={closeCreateModal}
+                disabled={creating}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCreate]}
+                onPress={submitCreateTeam}
+                disabled={creating}
+                activeOpacity={0.7}
+              >
+                {creating ? (
+                  <ActivityIndicator color={Colors.textInverse} />
+                ) : (
+                  <Text style={styles.modalButtonCreateText}>Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -248,6 +398,25 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.sm,
     color: Colors.textSecondary,
   },
+  orgLimitNote: {
+    marginTop: Layout.spacing.xs,
+    fontSize: Layout.fontSize.xs,
+    color: Colors.warning,
+  },
+  createTeamButton: {
+    alignSelf: 'flex-start',
+    marginTop: Layout.spacing.sm,
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  createTeamButtonText: {
+    fontSize: Layout.fontSize.sm,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
   tenancyBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -316,6 +485,74 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   
+  // Create Team modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Layout.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.card,
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.lg,
+  },
+  modalTitle: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  modalSubtitle: {
+    marginTop: Layout.spacing.xs,
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  modalInput: {
+    marginTop: Layout.spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Layout.borderRadius.md,
+    padding: Layout.spacing.md,
+    fontSize: Layout.fontSize.md,
+    color: Colors.text,
+    backgroundColor: Colors.background,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: Layout.spacing.lg,
+  },
+  modalButton: {
+    minWidth: 96,
+    height: Layout.buttonHeight.md,
+    borderRadius: Layout.borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Layout.spacing.lg,
+    marginLeft: Layout.spacing.sm,
+  },
+  modalButtonCancel: {
+    backgroundColor: Colors.buttonSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalButtonCancelText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  modalButtonCreate: {
+    backgroundColor: Colors.buttonPrimary,
+  },
+  modalButtonCreateText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.textInverse,
+  },
+
   // Logout Button
   logoutButton: {
     backgroundColor: Colors.error,
