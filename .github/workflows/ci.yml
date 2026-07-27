@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Bundle & health checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Hard gate: a full web export bundles the whole app through Metro, so it
+      # catches the breakage class we otherwise only find by hand — bad imports,
+      # JSX/syntax errors, unresolved modules.
+      - name: Bundle check (expo export)
+        run: npx expo export --platform web --output-dir "$RUNNER_TEMP/expo-export"
+
+      # Advisory: surfaces Expo dependency/config drift. Not a hard gate yet —
+      # there are known patch-version mismatches to reconcile first (tracked as
+      # a dependency-hygiene follow-up).
+      - name: Expo dependency/config health (advisory)
+        run: npx expo-doctor
+        continue-on-error: true
