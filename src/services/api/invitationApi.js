@@ -80,6 +80,29 @@ const invitationApi = {
   },
 
   /**
+   * Get pending invitations addressed to the current user (by internal user id).
+   * Returns rows with full org + team context, so combo invites are detectable.
+   * @returns {Promise<array>} List of pending invitations
+   */
+  async getPendingInvitations() {
+    try {
+      console.log('invitationApi - getPendingInvitations called');
+
+      const response = await apiClient.get('/api/invitations/pending');
+      console.log('invitationApi - Pending response:', response.data);
+
+      if (response.data.status === 'success') {
+        return response.data.data.invitations || [];
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch pending invitations');
+      }
+    } catch (error) {
+      console.error('Error fetching pending invitations:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get user's invitations
    * @param {object} params - Query parameters
    * @returns {Promise<array>} List of invitations
