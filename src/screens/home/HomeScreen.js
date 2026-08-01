@@ -16,10 +16,14 @@ import teamActivityApi from '../../services/api/teamActivityApi';
 import teamApi from '../../services/api/teamApi';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
+import { useBrandColors } from '../../contexts/BrandThemeContext';
 
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
+  // Active-org brand primary tints the home header gradient (defaults to
+  // Colors.primary when unbranded, keeping the original look).
+  const { primary } = useBrandColors();
   const [milestones, setMilestones] = useState([]);
   const [incomplete, setIncomplete] = useState([]);
   const [level, setLevel] = useState(1);
@@ -320,7 +324,7 @@ const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight, Colors.background]}
+        colors={[primary, Colors.primaryLight, Colors.background]}
         locations={[0, 0.3, 1]}
         style={styles.gradient}
       >

@@ -8,6 +8,7 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
+import { useBrandColors } from '../../contexts/BrandThemeContext';
 
 const Button = ({
   title,
@@ -19,11 +20,27 @@ const Button = ({
   style,
   textStyle,
 }) => {
+  // Primary CTAs follow the active org's brand primary (defaults to
+  // Colors.primary when unbranded). Only the brand-carrying pieces are
+  // overridden; disabled/secondary keep their static neutral styling.
+  const { primary } = useBrandColors();
+
+  const brandOverride =
+    !disabled && variant === 'primary'
+      ? { backgroundColor: primary }
+      : !disabled && variant === 'outline'
+      ? { borderColor: primary }
+      : null;
+
+  const brandTextOverride =
+    !disabled && variant === 'outline' ? { color: primary } : null;
+
   const buttonStyles = [
     styles.button,
     styles[`button_${variant}`],
     styles[`button_${size}`],
     disabled && styles.button_disabled,
+    brandOverride,
     style,
   ];
 
@@ -32,6 +49,7 @@ const Button = ({
     styles[`text_${variant}`],
     styles[`text_${size}`],
     disabled && styles.text_disabled,
+    brandTextOverride,
     textStyle,
   ];
 
@@ -43,7 +61,7 @@ const Button = ({
       activeOpacity={0.7}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? Colors.textInverse : Colors.primary} />
+        <ActivityIndicator color={variant === 'primary' ? Colors.textInverse : primary} />
       ) : (
         <Text style={textStyles}>{title}</Text>
       )}
