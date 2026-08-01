@@ -5,6 +5,11 @@
  */
 
 import apiClient from './apiClient';
+import {
+  isPersonalOrgTeamLimitError,
+  getReportedTeamLimit,
+  PERSONAL_ORG_TEAM_LIMIT_CODE,
+} from './teamLimit';
 
 const teamApi = {
   /**
@@ -100,23 +105,40 @@ const teamApi = {
   },
 
   /**
-   * Create a new team
-   * @param {object} teamData - Team data
+   * Create a new team within an organization.
+   * @param {string} orgId - Organization ID the team belongs to
+   * @param {object} teamData - Team data (e.g. { name })
    * @returns {Promise<object>} Created team
+   * @throws Personal-org team-limit rejections are normalized so callers can
+   *   key off `error.code === 'PERSONAL_ORG_TEAM_LIMIT'` and read `error.limit`.
    */
-  async createTeam(teamData) {
+  async createTeam(orgId, teamData) {
     try {
-      console.log('teamApi - createTeam called with:', teamData);
-      
-      const response = await apiClient.post('/api/teams', teamData);
+      console.log('teamApi - createTeam called for org:', orgId, teamData);
+
+      const response = await apiClient.post(`/api/organizations/${orgId}/teams`, teamData);
       console.log('teamApi - Create team response:', response.data);
-      
+
       if (response.data.status === 'success') {
         return response.data.data.team;
       } else {
         throw new Error(response.data.message || 'Failed to create team');
       }
     } catch (error) {
+      // Personal orgs are capped (ORG-6). Normalize the backend's 403 into an
+      // error whose `code`/`limit` the UI can consume directly, instead of
+      // leaking the raw axios error whose `.code` is an axios code.
+      if (isPersonalOrgTeamLimitError(error)) {
+        const limit = getReportedTeamLimit(error);
+        const limitError = new Error(
+          error?.response?.data?.message || 'Personal organization team limit reached'
+        );
+        limitError.code = PERSONAL_ORG_TEAM_LIMIT_CODE;
+        limitError.limit = limit;
+        limitError.status = 403;
+        console.warn('teamApi - personal org team limit reached (limit:', limit, ')');
+        throw limitError;
+      }
       console.error('Error creating team:', error);
       throw error;
     }
