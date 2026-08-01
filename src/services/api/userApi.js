@@ -40,10 +40,23 @@ class UserApi {
   }
 
   /**
-   * Get user's organizations
+   * Get user's organizations.
+   * Each org carries an `isActive` flag marking the user's current context (ORG-4).
    */
   async getUserOrganizations() {
     const response = await apiClient.get('/api/users/me/organizations');
+    return response.data;
+  }
+
+  /**
+   * Switch the authenticated user's active organization context (ORG-4).
+   * The backend persists `active_org_id` and returns the now-active org.
+   * @param {string} orgId - Target organization the user is an active member of
+   * @returns {Promise<object>} { status, message, data: { activeOrgId, organization } }
+   * @throws Rejects with the axios error (403 when not an active member).
+   */
+  async setActiveOrganization(orgId) {
+    const response = await apiClient.post('/api/users/me/context', { orgId });
     return response.data;
   }
 

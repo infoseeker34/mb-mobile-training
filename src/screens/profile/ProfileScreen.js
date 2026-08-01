@@ -19,7 +19,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import organizationApi from '../../services/api/organizationApi';
+import userApi from '../../services/api/userApi';
 import teamApi from '../../services/api/teamApi';
+import OrgSwitcherModal from '../../components/OrgSwitcherModal';
 import {
   PERSONAL_ORG_TEAM_LIMIT,
   isPersonalOrg,
@@ -34,6 +36,13 @@ const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [organizations, setOrganizations] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
+
+  // Active-org context switching state (ORG-4). `myOrgs` comes from
+  // GET /api/users/me/organizations, where each org carries an `isActive` flag
+  // marking the user's current context.
+  const [myOrgs, setMyOrgs] = useState([]);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
+  const [switchingOrgId, setSwitchingOrgId] = useState(null);
 
   // Team-creation modal state (ORG-6)
   const [createOrg, setCreateOrg] = useState(null);
@@ -66,6 +75,63 @@ const ProfileScreen = ({ navigation }) => {
     const orgs = await loadOrganizations();
     if (orgs) setOrganizations(orgs);
   }, [loadOrganizations]);
+
+  // ORG-4: load the user's orgs with their active-context flag. Kept separate
+  // from the ORG-6 organizations list (different endpoint/shape) so the two
+  // slices don't entangle.
+  const loadMyOrgs = useCallback(async () => {
+    try {
+      const result = await userApi.getUserOrganizations();
+      return result?.data?.organizations || [];
+    } catch (error) {
+      // Non-fatal — the switcher simply won't render if this fails.
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const orgs = await loadMyOrgs();
+      if (mounted && orgs) setMyOrgs(orgs);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [loadMyOrgs]);
+
+  const activeOrg = myOrgs.find((org) => org.isActive) || null;
+
+  // Switch active org context: persist server-side, then re-fetch so the
+  // active label and the switcher's highlight reflect the new context.
+  const handleSelectOrg = async (orgId) => {
+    if (!orgId || orgId === activeOrg?.orgId) {
+      setSwitcherVisible(false);
+      return;
+    }
+    setSwitchingOrgId(orgId);
+    try {
+      await userApi.setActiveOrganization(orgId);
+      const orgs = await loadMyOrgs();
+      if (orgs) setMyOrgs(orgs);
+      setSwitcherVisible(false);
+      const picked = (orgs || myOrgs).find((org) => org.orgId === orgId);
+      Alert.alert(
+        'Organization switched',
+        picked ? `You're now acting within "${picked.name}".` : 'Active organization updated.'
+      );
+    } catch (error) {
+      // 403 when the user isn't an active member of the target org.
+      const message =
+        error?.response?.status === 403
+          ? error?.response?.data?.message ||
+            'You are not an active member of that organization.'
+          : error?.response?.data?.message || error?.message || 'Failed to switch organization.';
+      Alert.alert('Could not switch', message);
+    } finally {
+      setSwitchingOrgId(null);
+    }
+  };
 
   // Personal orgs are capped; short-circuit with the friendly limit alert when
   // the org is already at its limit, otherwise open the create-team modal.
@@ -164,6 +230,36 @@ const ProfileScreen = ({ navigation }) => {
             <InfoRow label="Last Login" value={formatDate(user?.lastLogin)} />
           </View>
         </View>
+
+        {/* Active Organization (ORG-4) */}
+        {myOrgs.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Active Organization</Text>
+            <View style={styles.infoCard}>
+              <View style={styles.activeOrgRow}>
+                <View style={styles.activeOrgTextGroup}>
+                  <Text style={styles.activeOrgName} numberOfLines={1}>
+                    {activeOrg?.name || 'None selected'}
+                  </Text>
+                  {activeOrg && (
+                    <Text style={styles.activeOrgMeta}>
+                      {activeOrg.isPersonal ? 'Personal' : 'Enterprise'}
+                    </Text>
+                  )}
+                </View>
+                {myOrgs.length > 1 && (
+                  <TouchableOpacity
+                    style={styles.switchButton}
+                    onPress={() => setSwitcherVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.switchButtonText}>Switch</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Organizations */}
         <View style={styles.section}>
@@ -296,6 +392,17 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Org context switcher (ORG-4) */}
+      <OrgSwitcherModal
+        visible={switcherVisible}
+        organizations={myOrgs}
+        switchingOrgId={switchingOrgId}
+        onSelect={handleSelectOrg}
+        onClose={() => {
+          if (switchingOrgId === null) setSwitcherVisible(false);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -367,6 +474,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+
+  // Active organization (ORG-4)
+  activeOrgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeOrgTextGroup: {
+    flex: 1,
+    marginRight: Layout.spacing.md,
+  },
+  activeOrgName: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  activeOrgMeta: {
+    marginTop: Layout.spacing.xs,
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  switchButton: {
+    paddingVertical: Layout.spacing.xs,
+    paddingHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  switchButtonText: {
+    fontSize: Layout.fontSize.sm,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 
   // Organization card
