@@ -22,6 +22,7 @@ import organizationApi from '../../services/api/organizationApi';
 import userApi from '../../services/api/userApi';
 import teamApi from '../../services/api/teamApi';
 import OrgSwitcherModal from '../../components/OrgSwitcherModal';
+import OrgBrandLogo from '../../components/OrgBrandLogo';
 import {
   PERSONAL_ORG_TEAM_LIMIT,
   isPersonalOrg,
@@ -29,6 +30,7 @@ import {
   getReportedTeamLimit,
   buildTeamLimitAlert,
 } from '../../services/api/teamLimit';
+import { getOrgBranding } from '../../services/utils/orgBranding';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
@@ -101,6 +103,9 @@ const ProfileScreen = ({ navigation }) => {
   }, [loadMyOrgs]);
 
   const activeOrg = myOrgs.find((org) => org.isActive) || null;
+  // ORG-3a: branding for the active-org card (only enterprise orgs with a
+  // well-formed `branding` object yield a value; personal orgs stay as-is).
+  const activeBranding = getOrgBranding(activeOrg);
 
   // Switch active org context: persist server-side, then re-fetch so the
   // active label and the switcher's highlight reflect the new context.
@@ -235,11 +240,28 @@ const ProfileScreen = ({ navigation }) => {
         {myOrgs.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Active Organization</Text>
-            <View style={styles.infoCard}>
+            <View
+              style={[
+                styles.infoCard,
+                activeBranding?.accentColor && {
+                  borderLeftWidth: 4,
+                  borderLeftColor: activeBranding.accentColor,
+                },
+              ]}
+            >
               <View style={styles.activeOrgRow}>
+                {activeBranding && (
+                  <OrgBrandLogo
+                    logoUrl={activeBranding.logoUrl}
+                    name={activeBranding.displayName || activeOrg?.name}
+                    accentColor={activeBranding.accentColor}
+                    size={40}
+                    style={styles.activeOrgLogo}
+                  />
+                )}
                 <View style={styles.activeOrgTextGroup}>
                   <Text style={styles.activeOrgName} numberOfLines={1}>
-                    {activeOrg?.name || 'None selected'}
+                    {activeBranding?.displayName || activeOrg?.name || 'None selected'}
                   </Text>
                   {activeOrg && (
                     <Text style={styles.activeOrgMeta}>
@@ -278,10 +300,33 @@ const ProfileScreen = ({ navigation }) => {
               const teamsLabel = personal
                 ? `${teamCount} of ${PERSONAL_ORG_TEAM_LIMIT} teams`
                 : `${teamCount} teams`;
+              // ORG-3a: enterprise branding for this org's own card. Personal
+              // orgs (and enterprise orgs without branding) get `null` and
+              // render exactly as before.
+              const branding = getOrgBranding(org);
+              const orgTitle = branding?.displayName || org.name;
               return (
-                <View key={org.id} style={styles.orgCard}>
+                <View
+                  key={org.id}
+                  style={[
+                    styles.orgCard,
+                    branding?.accentColor && {
+                      borderLeftWidth: 4,
+                      borderLeftColor: branding.accentColor,
+                    },
+                  ]}
+                >
                   <View style={styles.orgHeaderRow}>
-                    <Text style={styles.orgName}>{org.name}</Text>
+                    {branding && (
+                      <OrgBrandLogo
+                        logoUrl={branding.logoUrl}
+                        name={orgTitle}
+                        accentColor={branding.accentColor}
+                        size={36}
+                        style={styles.orgLogo}
+                      />
+                    )}
+                    <Text style={styles.orgName}>{orgTitle}</Text>
                     <View
                       style={[
                         styles.tenancyBadge,
@@ -298,6 +343,11 @@ const ProfileScreen = ({ navigation }) => {
                       </Text>
                     </View>
                   </View>
+                  {branding?.tagline ? (
+                    <Text style={styles.orgTagline} numberOfLines={2}>
+                      {branding.tagline}
+                    </Text>
+                  ) : null}
                   <Text style={styles.orgMeta}>
                     {(org.member_count ?? 0)} members · {teamsLabel}
                   </Text>
@@ -482,6 +532,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  activeOrgLogo: {
+    marginRight: Layout.spacing.md,
+  },
   activeOrgTextGroup: {
     flex: 1,
     marginRight: Layout.spacing.md,
@@ -526,12 +579,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  orgLogo: {
+    marginRight: Layout.spacing.sm,
+  },
   orgName: {
     flex: 1,
     fontSize: Layout.fontSize.md,
     fontWeight: '600',
     color: Colors.text,
     marginRight: Layout.spacing.sm,
+  },
+  orgTagline: {
+    marginTop: Layout.spacing.xs,
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
   },
   orgMeta: {
     marginTop: Layout.spacing.xs,
