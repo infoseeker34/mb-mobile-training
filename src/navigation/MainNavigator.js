@@ -22,36 +22,47 @@ import ComposeMessageScreen from '../screens/messages/ComposeMessageScreen';
 import InvitationsScreen from '../screens/messages/InvitationsScreen';
 import Colors from '../constants/Colors';
 import Layout from '../constants/Layout';
+import { useBrandColors } from '../contexts/BrandThemeContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Shared header chrome for stack screens. Background follows the active org's
+// brand primary (defaults to Colors.primary when unbranded); tint stays neutral.
+const useBrandedHeaderOptions = () => {
+  const { primary } = useBrandColors();
+  return {
+    headerStyle: {
+      backgroundColor: primary,
+    },
+    headerTintColor: Colors.textInverse,
+    headerTitleStyle: {
+      fontWeight: 'bold',
+    },
+  };
+};
+
 // Training Stack Navigator (includes Training, PlanDetails, and ActiveTraining screens)
 const TrainingStack = () => {
+  const brandedHeader = useBrandedHeaderOptions();
   return (
     <Stack.Navigator>
-      <Stack.Screen 
-        name="TrainingMain" 
+      <Stack.Screen
+        name="TrainingMain"
         component={TrainingScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="PlanDetails" 
+      <Stack.Screen
+        name="PlanDetails"
         component={PlanDetailsScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="ActiveTraining" 
+      <Stack.Screen
+        name="ActiveTraining"
         component={ActiveTrainingScreen}
         options={{
           title: 'Training Session',
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          ...brandedHeader,
         }}
       />
     </Stack.Navigator>
@@ -60,30 +71,25 @@ const TrainingStack = () => {
 
 // Calendar Stack Navigator (includes Calendar, PlanDetails, and ActiveTraining screens)
 const CalendarStack = () => {
+  const brandedHeader = useBrandedHeaderOptions();
   return (
     <Stack.Navigator>
-      <Stack.Screen 
-        name="CalendarMain" 
+      <Stack.Screen
+        name="CalendarMain"
         component={CalendarScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="PlanDetails" 
+      <Stack.Screen
+        name="PlanDetails"
         component={PlanDetailsScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="ActiveTraining" 
+      <Stack.Screen
+        name="ActiveTraining"
         component={ActiveTrainingScreen}
         options={{
           title: 'Training Session',
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          ...brandedHeader,
         }}
       />
     </Stack.Navigator>
@@ -92,58 +98,41 @@ const CalendarStack = () => {
 
 // Messages Stack Navigator (includes ConversationList, ThreadDetail, and Compose screens)
 const MessagesStack = () => {
+  const brandedHeader = useBrandedHeaderOptions();
   return (
     <Stack.Navigator
       screenOptions={{
         headerBackTitleVisible: false,
       }}
     >
-      <Stack.Screen 
-        name="ConversationList" 
+      <Stack.Screen
+        name="ConversationList"
         component={ConversationListScreen}
         options={{
           headerShown: false,
         }}
       />
-      <Stack.Screen 
-        name="ThreadDetail" 
+      <Stack.Screen
+        name="ThreadDetail"
         component={ThreadDetailScreen}
         options={{
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          ...brandedHeader,
         }}
       />
-      <Stack.Screen 
-        name="ComposeMessage" 
+      <Stack.Screen
+        name="ComposeMessage"
         component={ComposeMessageScreen}
         options={{
           title: 'New Message',
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          ...brandedHeader,
         }}
       />
-      <Stack.Screen 
-        name="Invitations" 
+      <Stack.Screen
+        name="Invitations"
         component={InvitationsScreen}
         options={{
           title: 'Invitations',
-          headerStyle: {
-            backgroundColor: Colors.primary,
-          },
-          headerTintColor: Colors.textInverse,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          ...brandedHeader,
         }}
       />
     </Stack.Navigator>
@@ -152,6 +141,9 @@ const MessagesStack = () => {
 
 const MainNavigator = () => {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  // Active-org brand primary drives the tab bar header + active-tab tint,
+  // defaulting to Colors.primary so unbranded contexts are unchanged.
+  const { primary } = useBrandColors();
 
   useEffect(() => {
     loadUnreadCount();
@@ -181,14 +173,14 @@ const MainNavigator = () => {
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: Colors.primary,
+          backgroundColor: primary,
         },
         headerTintColor: Colors.textInverse,
         headerTitleStyle: {
           fontWeight: 'bold',
         },
         headerTitleAlign: 'center',
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: primary,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: {
           height: Layout.tabBarHeight,

@@ -88,3 +88,27 @@ export function getOrgBranding(org) {
   if (!isEnterpriseOrg(org)) return null;
   return normalizeBranding(org && org.branding);
 }
+
+/**
+ * Resolve the app-wide brand theme colors from a list of the user's orgs.
+ *
+ * Pure and side-effect free so it can be unit-tested and reused by the
+ * BrandThemeContext. Finds the *active* org (`isActive === true`, matching the
+ * camelCase `/api/users/me/organizations` contract) and, when it is an
+ * enterprise org carrying well-formed hex branding, returns its
+ * `primaryColor` / `accentColor`. Every other case — no active org, personal
+ * or unbranded active org, malformed hex — falls back to `defaults`, so an
+ * unbranded context looks identical to the static `Colors.js` palette.
+ *
+ * @param {Array<object>} orgs - orgs from GET /api/users/me/organizations
+ * @param {{ primary: string, accent: string }} defaults - fallback colors
+ * @returns {{ primary: string, accent: string }}
+ */
+export function resolveActiveBrandColors(orgs, defaults) {
+  const active = Array.isArray(orgs) ? orgs.find((org) => org && org.isActive) : null;
+  const branding = getOrgBranding(active);
+  return {
+    primary: (branding && branding.primaryColor) || defaults.primary,
+    accent: (branding && branding.accentColor) || defaults.accent,
+  };
+}

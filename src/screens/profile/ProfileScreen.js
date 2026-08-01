@@ -31,11 +31,14 @@ import {
   buildTeamLimitAlert,
 } from '../../services/api/teamLimit';
 import { getOrgBranding } from '../../services/utils/orgBranding';
+import { useBrandColors } from '../../contexts/BrandThemeContext';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
+  // Repaint the app-wide brand chrome as soon as the active org changes here.
+  const { refreshBrand } = useBrandColors();
   const [organizations, setOrganizations] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
 
@@ -119,6 +122,8 @@ const ProfileScreen = ({ navigation }) => {
       await userApi.setActiveOrganization(orgId);
       const orgs = await loadMyOrgs();
       if (orgs) setMyOrgs(orgs);
+      // Re-resolve the active-org theme so the header/tabs/CTAs repaint now.
+      refreshBrand();
       setSwitcherVisible(false);
       const picked = (orgs || myOrgs).find((org) => org.orgId === orgId);
       Alert.alert(
