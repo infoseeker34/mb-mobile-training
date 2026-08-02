@@ -8,7 +8,10 @@
 import { Platform } from 'react-native';
 
 // API Configuration
-export const API_BASE_URL = 'http://localhost:3050';
+// Bare backend origin (the app appends `/api/...` per call). Overridden at
+// build time by EXPO_PUBLIC_API_URL for hosted builds (e.g. the deployed API
+// Gateway ServiceEndpoint); defaults to the local dev server.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3050';
 
 // Cognito OAuth Configuration
 // Web has no custom URL scheme, so the hosted UI must redirect back to an
@@ -19,7 +22,15 @@ export const COGNITO_CONFIG = {
   domain: 'magic-board-dev-auth.auth.us-east-1.amazoncognito.com',
   userPoolId: 'us-east-1_4CSKmyoGw',
   clientId: '738um5t7qmnne5p6gumi6149ua',
-  redirectUri: Platform.OS === 'web' ? 'http://localhost:8081/auth/callback' : 'mbtraining://auth',
+  // Web: redirect back to whatever origin is serving the app (localhost in
+  // dev, the CloudFront domain in prod) — that URL must be a registered Cognito
+  // callback. Native: the custom URL scheme deep link.
+  redirectUri:
+    Platform.OS === 'web'
+      ? (typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : 'http://localhost:8081/auth/callback')
+      : 'mbtraining://auth',
   scopes: ['openid', 'email', 'profile'],
   responseType: 'code',
 };
