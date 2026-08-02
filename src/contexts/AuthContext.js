@@ -13,6 +13,7 @@ import { COGNITO_CONFIG } from '../constants/Config';
 import SecureStorage from '../services/storage/SecureStorage';
 import authApi from '../services/api/authApi';
 import userApi from '../services/api/userApi';
+import { registerPushToken, unregisterPushToken } from '../services/notifications/pushRegistration';
 
 // Enable web browser to dismiss on iOS
 WebBrowser.maybeCompleteAuthSession();
@@ -226,6 +227,10 @@ export const AuthProvider = ({ children }) => {
         }
         
         setIsAuthenticated(true);
+
+        // Register this device for push now that we're authenticated (EPIC-006).
+        // Fire-and-forget + non-throwing so it never blocks the auth flow.
+        registerPushToken();
       } else {
         await logout();
       }
@@ -311,6 +316,8 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
+      // Unregister push BEFORE clearing tokens — the API call needs auth.
+      await unregisterPushToken();
       await SecureStorage.clearTokens();
       setUser(null);
       setIsAuthenticated(false);

@@ -129,6 +129,43 @@ const notificationApi = {
       throw error;
     }
   },
+
+  /**
+   * Register (or refresh) this device's Expo push token so server-sent push
+   * notifications can reach it (EPIC-006).
+   * @param {string} token - Expo push token (ExponentPushToken[...])
+   * @param {string} platform - 'ios' | 'android' | 'web'
+   * @returns {Promise<void>}
+   */
+  async registerDeviceToken(token, platform) {
+    try {
+      const response = await apiClient.post('/api/notifications/device-tokens', { token, platform });
+      if (response.data.status !== 'success') {
+        throw new Error(response.data.message || 'Failed to register device token');
+      }
+    } catch (error) {
+      console.error('Error registering device token:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Unregister this device's push token (sign-out / permission revoked).
+   * @param {string} token - Expo push token to remove
+   * @returns {Promise<void>}
+   */
+  async unregisterDeviceToken(token) {
+    try {
+      // axios DELETE carries the body under `data`.
+      const response = await apiClient.delete('/api/notifications/device-tokens', { data: { token } });
+      if (response.data.status !== 'success') {
+        throw new Error(response.data.message || 'Failed to unregister device token');
+      }
+    } catch (error) {
+      console.error('Error unregistering device token:', error);
+      throw error;
+    }
+  },
 };
 
 export default notificationApi;

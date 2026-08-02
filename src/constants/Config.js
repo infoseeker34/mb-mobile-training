@@ -68,7 +68,7 @@ export const APP_CONFIG = {
 // Feature Flags (for gradual rollout)
 export const FEATURES = {
   offlineMode: true,
-  pushNotifications: false, // Enable in Phase 5
+  pushNotifications: true, // EPIC-006: register Expo push token on login (native only)
   analytics: false, // Enable in Phase 5
   deepLinking: false, // Enable in Phase 5
 };
