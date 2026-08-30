@@ -15,13 +15,11 @@ const teamActivityApi = {
    */
   async getUserTeamsActivityFeed(limit = 20, offset = 0) {
     try {
-      console.log('teamActivityApi - getUserTeamsActivityFeed called');
       
       const response = await apiClient.get('/api/teams/activity/feed', {
         params: { limit, offset }
       });
       
-      console.log('teamActivityApi - Response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.activities;
@@ -43,7 +41,6 @@ const teamActivityApi = {
    */
   async getTeamActivityFeed(teamId, limit = 20, offset = 0) {
     try {
-      console.log('teamActivityApi - getTeamActivityFeed called for team:', teamId);
       
       const response = await apiClient.get(`/api/teams/${teamId}/activity`, {
         params: { limit, offset }
@@ -67,7 +64,6 @@ const teamActivityApi = {
    */
   async celebrateActivity(activityId) {
     try {
-      console.log('teamActivityApi - celebrateActivity called for:', activityId);
       
       const response = await apiClient.post(`/api/teams/activity/${activityId}/celebrate`);
       
@@ -88,15 +84,12 @@ const teamActivityApi = {
    */
   async getUserTeamsIncompleteAssignments() {
     try {
-      console.log('teamActivityApi - getUserTeamsIncompleteAssignments called');
       
       // Get device timezone for accurate "today" calculations
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      console.log('teamActivityApi - Using timezone:', timezone);
       
       const response = await apiClient.get(`/api/teams/incomplete-assignments/feed?timezone=${encodeURIComponent(timezone)}`);
       
-      console.log('teamActivityApi - Incomplete assignments response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.incompleteAssignments;
@@ -116,7 +109,6 @@ const teamActivityApi = {
    */
   async getTodaysNudges(assignmentId) {
     try {
-      console.log('teamActivityApi - getTodaysNudges called for:', assignmentId);
       
       // Get device timezone for accurate "today" calculations
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -141,11 +133,9 @@ const teamActivityApi = {
    */
   async getTodaysAssignmentCompletions(assignmentId) {
     try {
-      console.log('teamActivityApi - getTodaysAssignmentCompletions called for:', assignmentId);
       
       // Get device timezone for accurate "today" calculations
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      console.log('teamActivityApi - Using timezone:', timezone);
       
       const response = await apiClient.get(`/api/teams/assignments/${assignmentId}/completions/today?timezone=${encodeURIComponent(timezone)}`);
       
@@ -169,7 +159,6 @@ const teamActivityApi = {
    */
   async sendNudge(toUserId, assignmentId, message = null) {
     try {
-      console.log('teamActivityApi - sendNudge called:', { toUserId, assignmentId });
       
       const response = await apiClient.post('/api/teams/nudge', {
         toUserId,

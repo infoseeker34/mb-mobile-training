@@ -16,7 +16,6 @@ const sessionApi = {
    */
   async getSessionHistory(params = {}) {
     try {
-      console.log('sessionApi - getSessionHistory called with params:', params);
       
       const queryParams = new URLSearchParams();
       
@@ -29,11 +28,8 @@ const sessionApi = {
 
       const queryString = queryParams.toString();
       const url = `/api/gamification/sessions/history${queryString ? `?${queryString}` : ''}`;
-      console.log('sessionApi - Full URL:', url);
       
       const response = await apiClient.get(url);
-      console.log('sessionApi - Response status:', response.status);
-      console.log('sessionApi - Response data:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -55,7 +51,6 @@ const sessionApi = {
    */
   async startSession(sessionData) {
     try {
-      console.log('sessionApi - startSession:', sessionData);
       
       const response = await apiClient.post('/api/gamification/sessions/start', sessionData);
       
@@ -78,7 +73,6 @@ const sessionApi = {
    */
   async completeSession(sessionId, completionData) {
     try {
-      console.log('sessionApi - completeSession:', { sessionId, completionData });
       
       const response = await apiClient.post(
         `/api/gamification/sessions/${sessionId}/complete`,

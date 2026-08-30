@@ -5,26 +5,34 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ActivityIndicator,
   Dimensions,
-  ScrollView
+  ScrollView,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api/apiClient';
 import planApi from '../../services/api/planApi';
+import { APP_CONFIG } from '../../constants/Config';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 0.5; // Optimized for space usage
+
+// Session autosave: an in-progress session snapshot survives an app kill and
+// is offered for resume when the same program is reopened soon after.
+const SESSION_SNAPSHOT_KEY = 'active_session_snapshot';
+const SNAPSHOT_MAX_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 const ActiveTrainingScreen = ({ route, navigation }) => {
   const { planData: initialPlanData, assignmentId, planId, programId } = route.params || {};
@@ -44,6 +52,9 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   const [sessionId, setSessionId] = useState(null);
   const [totalTrainingTime, setTotalTrainingTime] = useState(0); // Accumulated time in seconds
   const [taskStartTime, setTaskStartTime] = useState(null);
+  const [taskTimes, setTaskTimes] = useState({}); // taskId -> actual seconds spent
+  const resumeCheckedRef = useRef(false);
+  const snapshotRef = useRef(null);
   
   // Audio players using expo-audio
   const player30s = useAudioPlayer(require('../../assets/sounds/beep.mp3'));
@@ -54,7 +65,111 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   const tasks = planData?.tasks || [];
   const currentTask = tasks[currentTaskIndex];
   const isLastTask = currentTaskIndex === tasks.length - 1;
-  const allTasksComplete = currentTaskIndex >= tasks.length;
+  const allTasksComplete = tasks.length > 0 && currentTaskIndex >= tasks.length;
+
+  // Keep the latest snapshot data available to the autosave interval without
+  // re-registering it on every state change.
+  snapshotRef.current = {
+    sessionId,
+    programId: planData?.programId || programId || planId || null,
+    currentTaskIndex,
+    totalTrainingTime,
+    completedTasks,
+    skippedTasks,
+    taskTimes,
+    inProgress: !allTasksComplete && (currentTaskIndex > 0 || totalTrainingTime > 0),
+  };
+
+  const persistSnapshot = async () => {
+    const snapshot = snapshotRef.current;
+    if (!snapshot || !snapshot.inProgress || !snapshot.programId) return;
+    try {
+      await AsyncStorage.setItem(
+        SESSION_SNAPSHOT_KEY,
+        JSON.stringify({ ...snapshot, timestamp: Date.now() })
+      );
+    } catch (error) {
+      console.error('Error saving session snapshot:', error);
+    }
+  };
+
+  const clearSnapshot = async () => {
+    try {
+      await AsyncStorage.removeItem(SESSION_SNAPSHOT_KEY);
+    } catch (error) {
+      console.error('Error clearing session snapshot:', error);
+    }
+  };
+
+  const offerResumeIfAvailable = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SESSION_SNAPSHOT_KEY);
+      if (!raw) return;
+
+      const snapshot = JSON.parse(raw);
+      const isFresh =
+        snapshot.timestamp && Date.now() - snapshot.timestamp < SNAPSHOT_MAX_AGE_MS;
+      if (!isFresh) {
+        await clearSnapshot();
+        return;
+      }
+
+      const taskCount = planData?.tasks?.length || 0;
+      const isResumable =
+        snapshot.programId === planData?.programId &&
+        (snapshot.currentTaskIndex > 0 || snapshot.totalTrainingTime > 0) &&
+        snapshot.currentTaskIndex < taskCount;
+      if (!isResumable) return;
+
+      Alert.alert(
+        'Resume Session?',
+        'Resume where you left off?',
+        [
+          {
+            text: 'Start Over',
+            style: 'destructive',
+            onPress: () => {
+              clearSnapshot();
+            },
+          },
+          {
+            text: 'Resume',
+            onPress: () => {
+              setCurrentTaskIndex(snapshot.currentTaskIndex || 0);
+              setTotalTrainingTime(snapshot.totalTrainingTime || 0);
+              setCompletedTasks(snapshot.completedTasks || []);
+              setSkippedTasks(snapshot.skippedTasks || []);
+              setTaskTimes(snapshot.taskTimes || {});
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    } catch (error) {
+      console.error('Error checking session snapshot:', error);
+    }
+  };
+
+  // Offer resume once, as soon as the plan (and its program id) is known
+  useEffect(() => {
+    if (planData && !resumeCheckedRef.current) {
+      resumeCheckedRef.current = true;
+      offerResumeIfAvailable();
+    }
+  }, [planData]);
+
+  // Autosave the snapshot on the configured interval
+  useEffect(() => {
+    const interval = setInterval(persistSnapshot, APP_CONFIG.sessionAutoSaveInterval);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Save the snapshot on task transitions
+  useEffect(() => {
+    if (currentTaskIndex > 0 && !allTasksComplete) {
+      persistSnapshot();
+    }
+  }, [currentTaskIndex]);
 
   // Fetch plan data if not provided
   useEffect(() => {
@@ -100,6 +215,10 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
 
   // Complete session when all tasks are done
   useEffect(() => {
+    if (allTasksComplete) {
+      // The finished run should never be offered for resume again
+      clearSnapshot();
+    }
     if (allTasksComplete && sessionId) {
       completeTrainingSession();
     }
@@ -201,14 +320,24 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSkipTask = () => {
-    // Add time spent on this task (even if skipped) to total
-    if (taskStartTime) {
-      const taskEndTime = new Date();
-      const taskDuration = Math.floor((taskEndTime - taskStartTime) / 1000); // seconds
-      setTotalTrainingTime(prev => prev + taskDuration);
+  // Record the actual time spent on the current task (in seconds) into both
+  // the session total and the per-task breakdown. No-op if the task was never
+  // started, so an immediately skipped task records ~0.
+  const recordTaskElapsed = () => {
+    if (taskStartTime && currentTask) {
+      const elapsedSeconds = Math.floor((new Date() - taskStartTime) / 1000);
+      setTotalTrainingTime(prev => prev + elapsedSeconds);
+      setTaskTimes(prev => ({
+        ...prev,
+        [currentTask.taskId]: (prev[currentTask.taskId] || 0) + elapsedSeconds,
+      }));
     }
-    
+  };
+
+  const handleSkipTask = () => {
+    // Add time spent on this task (even if skipped) to totals
+    recordTaskElapsed();
+
     setSkippedTasks([...skippedTasks, currentTask.taskId]);
     setTimerActive(false);
     
@@ -220,13 +349,9 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   };
 
   const handleTaskComplete = () => {
-    // Add time spent on this task to total
-    if (taskStartTime) {
-      const taskEndTime = new Date();
-      const taskDuration = Math.floor((taskEndTime - taskStartTime) / 1000); // seconds
-      setTotalTrainingTime(prev => prev + taskDuration);
-    }
-    
+    // Add time spent on this task to totals
+    recordTaskElapsed();
+
     setCompletedTasks([...completedTasks, currentTask.taskId]);
     playerComplete.seekTo(0);
     playerComplete.play();
@@ -257,8 +382,9 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
       });
       
       if (response.data.status === 'success') {
+        // Note: totalTrainingTime is deliberately not reset here — it starts at
+        // 0 for a fresh run and may already hold restored snapshot time.
         setSessionId(response.data.data.session.sessionId);
-        setTotalTrainingTime(0);
         console.log('✅ Training session started:', response.data.data.session.sessionId);
       }
     } catch (error) {
@@ -270,8 +396,8 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
         if (activeSession.programId === planData.programId) {
           console.log('♻️ Reusing existing session for same program:', activeSession.sessionId);
           setSessionId(activeSession.sessionId);
-          // Reset training time accumulator for resumed session
-          setTotalTrainingTime(0);
+          // Preserve any accumulated training time — resetting it here would
+          // discard progress from the run being resumed.
         } else {
           // Different program - abandon the old session and start new one
           console.log('🔄 Abandoning old session for different program');
@@ -287,7 +413,6 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
             });
             if (retryResponse.data.status === 'success') {
               setSessionId(retryResponse.data.data.session.sessionId);
-              setTotalTrainingTime(0);
               console.log('✅ New training session started:', retryResponse.data.data.session.sessionId);
             }
           } catch (abandonError) {
@@ -311,12 +436,14 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
       const totalTime = Math.ceil(totalTrainingTime / 60) || 1; // At least 1 minute
       console.log(`Total training time: ${totalTime} minutes (${totalTrainingTime} seconds)`);
 
-      // Build performance data for each task
+      // Build performance data for each task. timeSpent is the actual minutes
+      // spent on the task (0 for tasks that were never started, e.g. skipped
+      // immediately) — not the target.
       const performanceData = tasks.map(task => ({
         taskId: task.taskId,
         completed: completedTasks.includes(task.taskId),
         skipped: skippedTasks.includes(task.taskId),
-        timeSpent: task.timeTarget || 0
+        timeSpent: Math.round(((taskTimes[task.taskId] || 0) / 60) * 100) / 100
       }));
 
       const completionData = {

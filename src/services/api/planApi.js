@@ -5,30 +5,31 @@
  */
 
 import apiClient from './apiClient';
+import CacheStorage from '../storage/CacheStorage';
 
 const planApi = {
   /**
    * Get program details with tasks
+   * Network-first with offline cache fallback.
    * @param {string} programId - Program ID
    * @returns {Promise<object>} Program with tasks
    */
   async getProgramDetails(programId) {
-    try {
-      console.log('planApi - getProgramDetails called with programId:', programId);
-      
-      const response = await apiClient.get(`/api/gamification/plans/${programId}`);
-      console.log('planApi - Response status:', response.status);
-      console.log('planApi - Response data:', response.data);
-      
-      if (response.data.status === 'success') {
+    const plan = await CacheStorage.getWithFallback(
+      `program_details_${programId}`,
+      async () => {
+        const response = await apiClient.get(`/api/gamification/plans/${programId}`);
+        if (response.data.status !== 'success') {
+          throw new Error(response.data.message || 'Failed to fetch program details');
+        }
         return response.data.data.plan;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch program details');
       }
-    } catch (error) {
-      console.error('Error fetching program details:', error);
-      throw error;
+    );
+
+    if (plan == null) {
+      throw new Error('Failed to fetch program details');
     }
+    return plan;
   },
 
   /**
@@ -38,11 +39,8 @@ const planApi = {
    */
   async getAssignmentDetails(assignmentId) {
     try {
-      console.log('planApi - getAssignmentDetails called with assignmentId:', assignmentId);
       
       const response = await apiClient.get(`/api/gamification/assignments/${assignmentId}`);
-      console.log('planApi - Response status:', response.status);
-      console.log('planApi - Response data:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.assignment;
@@ -70,7 +68,6 @@ const planApi = {
    */
   async browsePrograms(params = {}) {
     try {
-      console.log('planApi - browsePrograms called with params:', params);
       
       const queryParams = new URLSearchParams();
       
@@ -102,17 +99,23 @@ const planApi = {
 
       const queryString = queryParams.toString();
       const url = `/api/gamification/plans/library${queryString ? `?${queryString}` : ''}`;
-      console.log('planApi - Full URL:', url);
-      
-      const response = await apiClient.get(url);
-      console.log('planApi - Response status:', response.status);
-      console.log('planApi - Response data:', response.data);
-      
-      if (response.data.status === 'success') {
-        return response.data.data; // Returns { plans: [], total: number }
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch programs');
+
+      // Network-first with offline cache fallback, keyed per query.
+      const data = await CacheStorage.getWithFallback(
+        `plans_library_${queryString || 'default'}`,
+        async () => {
+          const response = await apiClient.get(url);
+          if (response.data.status !== 'success') {
+            throw new Error(response.data.message || 'Failed to fetch programs');
+          }
+          return response.data.data; // Returns { plans: [], total: number }
+        }
+      );
+
+      if (data == null) {
+        throw new Error('Failed to fetch programs');
       }
+      return data;
     } catch (error) {
       console.error('Error browsing programs:', error);
       throw error;
