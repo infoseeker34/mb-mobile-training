@@ -14,10 +14,8 @@ const invitationApi = {
    */
   async getInvitationByToken(token) {
     try {
-      console.log('invitationApi - getInvitationByToken called for token:', token);
       
       const response = await apiClient.get(`/api/invitations/token/${token}`);
-      console.log('invitationApi - Response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.invitation;
@@ -37,10 +35,8 @@ const invitationApi = {
    */
   async acceptInvitation(token) {
     try {
-      console.log('invitationApi - acceptInvitation called for token:', token);
       
       const response = await apiClient.post(`/api/invitations/${token}/accept`);
-      console.log('invitationApi - Accept response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -65,10 +61,8 @@ const invitationApi = {
    */
   async declineInvitation(token) {
     try {
-      console.log('invitationApi - declineInvitation called for token:', token);
       
       const response = await apiClient.post(`/api/invitations/${token}/decline`);
-      console.log('invitationApi - Decline response:', response.data);
       
       if (response.data.status !== 'success') {
         throw new Error(response.data.message || 'Failed to decline invitation');
@@ -86,10 +80,8 @@ const invitationApi = {
    */
   async getPendingInvitations() {
     try {
-      console.log('invitationApi - getPendingInvitations called');
 
       const response = await apiClient.get('/api/invitations/pending');
-      console.log('invitationApi - Pending response:', response.data);
 
       if (response.data.status === 'success') {
         return response.data.data.invitations || [];
@@ -109,7 +101,6 @@ const invitationApi = {
    */
   async getInvitations(params = {}) {
     try {
-      console.log('invitationApi - getInvitations called with params:', params);
       
       const queryParams = new URLSearchParams();
       if (params.email) queryParams.append('email', params.email);
@@ -118,7 +109,6 @@ const invitationApi = {
       
       const url = `/api/invitations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await apiClient.get(url);
-      console.log('invitationApi - Response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.invitations;

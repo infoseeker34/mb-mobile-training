@@ -18,11 +18,8 @@ const teamApi = {
    */
   async getTeams() {
     try {
-      console.log('teamApi - getTeams called');
       
       const response = await apiClient.get('/api/teams');
-      console.log('teamApi - Response status:', response.status);
-      console.log('teamApi - Response data:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -42,10 +39,8 @@ const teamApi = {
    */
   async getTeam(teamId) {
     try {
-      console.log('teamApi - getTeam called for:', teamId);
       
       const response = await apiClient.get(`/api/teams/${teamId}`);
-      console.log('teamApi - Team response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.team;
@@ -65,10 +60,8 @@ const teamApi = {
    */
   async getTeamMembers(teamId) {
     try {
-      console.log('teamApi - getTeamMembers called for:', teamId);
       
       const response = await apiClient.get(`/api/teams/${teamId}/members`);
-      console.log('teamApi - Members response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.members;
@@ -88,10 +81,8 @@ const teamApi = {
    */
   async getTeamStreak(teamId) {
     try {
-      console.log('teamApi - getTeamStreak called for:', teamId);
       
       const response = await apiClient.get(`/api/teams/${teamId}/streak`);
-      console.log('teamApi - Streak response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.streak;
@@ -114,10 +105,8 @@ const teamApi = {
    */
   async createTeam(orgId, teamData) {
     try {
-      console.log('teamApi - createTeam called for org:', orgId, teamData);
 
       const response = await apiClient.post(`/api/organizations/${orgId}/teams`, teamData);
-      console.log('teamApi - Create team response:', response.data);
 
       if (response.data.status === 'success') {
         return response.data.data.team;
@@ -152,10 +141,8 @@ const teamApi = {
    */
   async updateTeam(teamId, teamData) {
     try {
-      console.log('teamApi - updateTeam called for:', teamId, teamData);
       
       const response = await apiClient.put(`/api/teams/${teamId}`, teamData);
-      console.log('teamApi - Update team response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.team;
@@ -175,10 +162,8 @@ const teamApi = {
    */
   async deleteTeam(teamId) {
     try {
-      console.log('teamApi - deleteTeam called for:', teamId);
       
       const response = await apiClient.delete(`/api/teams/${teamId}`);
-      console.log('teamApi - Delete team response:', response.data);
       
       if (response.data.status !== 'success') {
         throw new Error(response.data.message || 'Failed to delete team');

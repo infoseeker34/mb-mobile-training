@@ -5,50 +5,53 @@
  */
 
 import apiClient from './apiClient';
+import CacheStorage from '../storage/CacheStorage';
 
 const progressApi = {
   /**
    * Get player progress (XP, level, stats)
+   * Network-first with offline cache fallback.
    * @returns {Promise<object>} Progress data
    */
   async getPlayerProgress() {
-    try {
-      console.log('progressApi - getPlayerProgress called');
-      
-      const response = await apiClient.get('/api/gamification/progress');
-      console.log('progressApi - Progress response:', response.data);
-      
-      if (response.data.status === 'success') {
+    const progress = await CacheStorage.getWithFallback(
+      'player_progress',
+      async () => {
+        const response = await apiClient.get('/api/gamification/progress');
+        if (response.data.status !== 'success') {
+          throw new Error(response.data.message || 'Failed to fetch progress');
+        }
         return response.data.data.progress;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch progress');
       }
-    } catch (error) {
-      console.error('Error fetching player progress:', error);
-      throw error;
+    );
+
+    if (progress == null) {
+      throw new Error('Failed to fetch progress');
     }
+    return progress;
   },
 
   /**
    * Get streak data
+   * Network-first with offline cache fallback.
    * @returns {Promise<object>} Streak data
    */
   async getStreakData() {
-    try {
-      console.log('progressApi - getStreakData called');
-      
-      const response = await apiClient.get('/api/gamification/streak');
-      console.log('progressApi - Streak response:', response.data);
-      
-      if (response.data.status === 'success') {
+    const streak = await CacheStorage.getWithFallback(
+      'streak_data',
+      async () => {
+        const response = await apiClient.get('/api/gamification/streak');
+        if (response.data.status !== 'success') {
+          throw new Error(response.data.message || 'Failed to fetch streak');
+        }
         return response.data.data.streak;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch streak');
       }
-    } catch (error) {
-      console.error('Error fetching streak data:', error);
-      throw error;
+    );
+
+    if (streak == null) {
+      throw new Error('Failed to fetch streak');
     }
+    return streak;
   },
 
   /**
@@ -57,10 +60,8 @@ const progressApi = {
    */
   async getStreakStats() {
     try {
-      console.log('progressApi - getStreakStats called');
       
       const response = await apiClient.get('/api/gamification/streak/stats');
-      console.log('progressApi - Streak stats response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.stats;

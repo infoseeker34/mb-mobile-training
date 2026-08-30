@@ -15,7 +15,6 @@ import TrainingScreen from '../screens/training/TrainingScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
 import PlanDetailsScreen from '../screens/training/PlanDetailsScreen';
 import ActiveTrainingScreen from '../screens/training/ActiveTrainingScreen';
-import MessagesScreen from '../screens/messages/MessagesScreen';
 import ConversationListScreen from '../screens/messages/ConversationListScreen';
 import ThreadDetailScreen from '../screens/messages/ThreadDetailScreen';
 import ComposeMessageScreen from '../screens/messages/ComposeMessageScreen';
@@ -263,30 +262,6 @@ const MainNavigator = () => {
   );
 };
 
-
-// Placeholder screen for tabs not yet implemented
-const PlaceholderScreen = () => {
-  const { View, Text, StyleSheet } = require('react-native');
-  
-  return (
-    <View style={placeholderStyles.container}>
-      <Text style={placeholderStyles.text}>Coming Soon! 🚀</Text>
-    </View>
-  );
-};
-
-const placeholderStyles = {
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-  },
-  text: {
-    fontSize: Layout.fontSize.xl,
-    color: Colors.textSecondary,
-  },
-};
 
 const tabBadgeStyles = StyleSheet.create({
   badge: {

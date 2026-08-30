@@ -5,6 +5,7 @@
  */
 
 import apiClient from './apiClient';
+import CacheStorage from '../storage/CacheStorage';
 
 const assignmentApi = {
   /**
@@ -18,8 +19,6 @@ const assignmentApi = {
    */
   async getUserAssignments(userId, params = {}) {
     try {
-      console.log('assignmentApi - getUserAssignments called with userId:', userId);
-      console.log('assignmentApi - params:', params);
       
       const queryParams = new URLSearchParams();
       
@@ -35,17 +34,23 @@ const assignmentApi = {
 
       const queryString = queryParams.toString();
       const url = `/api/gamification/assignments/user/${userId}${queryString ? `?${queryString}` : ''}`;
-      console.log('assignmentApi - Full URL:', url);
-      
-      const response = await apiClient.get(url);
-      console.log('assignmentApi - Response status:', response.status);
-      console.log('assignmentApi - Response data:', response.data);
-      
-      if (response.data.status === 'success') {
-        return response.data.data.assignments;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch assignments');
+
+      // Network-first with offline cache fallback, keyed per user + filters.
+      const assignments = await CacheStorage.getWithFallback(
+        `assignments_user_${userId}_${queryString || 'all'}`,
+        async () => {
+          const response = await apiClient.get(url);
+          if (response.data.status !== 'success') {
+            throw new Error(response.data.message || 'Failed to fetch assignments');
+          }
+          return response.data.data.assignments;
+        }
+      );
+
+      if (assignments == null) {
+        throw new Error('Failed to fetch assignments');
       }
+      return assignments;
     } catch (error) {
       console.error('Error fetching user assignments:', error);
       throw error;
@@ -84,12 +89,10 @@ const assignmentApi = {
    */
   async checkProgramAssignment(userId, programId) {
     try {
-      console.log('assignmentApi - checkProgramAssignment:', { userId, programId });
       
       // Get all user assignments (no status filter to ensure we get everything)
       const assignments = await this.getUserAssignments(userId, {});
       
-      console.log('assignmentApi - All assignments:', assignments);
       
       // Find assignment for this program (active or scheduled only)
       const assignment = assignments.find(a => 
@@ -97,7 +100,6 @@ const assignmentApi = {
         (a.status === 'active' || a.status === 'scheduled')
       );
       
-      console.log('assignmentApi - Found assignment for program:', assignment);
       
       if (assignment) {
         const assignmentType = assignment.assignmentType || 
@@ -156,7 +158,6 @@ const assignmentApi = {
    */
   async createAssignment(assignmentData) {
     try {
-      console.log('assignmentApi - createAssignment:', assignmentData);
       
       const response = await apiClient.post('/api/gamification/assignments', assignmentData);
       
@@ -179,7 +180,6 @@ const assignmentApi = {
    */
   async updateAssignment(assignmentId, updates) {
     try {
-      console.log('assignmentApi - updateAssignment:', { assignmentId, updates });
       
       const response = await apiClient.put(
         `/api/gamification/assignments/${assignmentId}`,
@@ -204,7 +204,6 @@ const assignmentApi = {
    */
   async deleteAssignment(assignmentId) {
     try {
-      console.log('assignmentApi - deleteAssignment:', assignmentId);
       
       const response = await apiClient.delete(`/api/gamification/assignments/${assignmentId}`);
       

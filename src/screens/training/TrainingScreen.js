@@ -17,132 +17,6 @@ import AssignmentModal from '../../components/AssignmentModal';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
 
-// Mock data
-const MOCK_PLANS = [
-  {
-    id: '1',
-    name: 'Speed & Agility Fundamentals',
-    category: 'Speed',
-    difficulty: 'Beginner',
-    duration: 30,
-    sessions: 8,
-    description: 'Build your foundation with essential speed and agility drills',
-    exercises: 12,
-    equipment: 'Cones, Ladder'
-  },
-  {
-    id: '2',
-    name: 'Ball Control Mastery',
-    category: 'Technical',
-    difficulty: 'Intermediate',
-    duration: 45,
-    sessions: 12,
-    description: 'Advanced ball control techniques for game situations',
-    exercises: 15,
-    equipment: 'Ball, Cones'
-  },
-  {
-    id: '3',
-    name: 'Explosive Power Training',
-    category: 'Strength',
-    difficulty: 'Advanced',
-    duration: 40,
-    sessions: 10,
-    description: 'Develop explosive power for quick movements and jumps',
-    exercises: 10,
-    equipment: 'None'
-  },
-  {
-    id: '4',
-    name: 'First Touch Excellence',
-    category: 'Technical',
-    difficulty: 'Beginner',
-    duration: 25,
-    sessions: 6,
-    description: 'Master your first touch with progressive drills',
-    exercises: 8,
-    equipment: 'Ball, Wall'
-  },
-  {
-    id: '5',
-    name: 'Defensive Positioning',
-    category: 'Tactical',
-    difficulty: 'Intermediate',
-    duration: 35,
-    sessions: 8,
-    description: 'Learn proper defensive positioning and movement',
-    exercises: 10,
-    equipment: 'Cones'
-  }
-];
-
-const MOCK_HISTORY = [
-  {
-    id: '1',
-    planName: 'Speed & Agility Fundamentals',
-    date: '2026-01-10',
-    duration: 28,
-    completed: true,
-    xpEarned: 150,
-    completionRate: 100
-  },
-  {
-    id: '2',
-    planName: 'Ball Control Mastery',
-    date: '2026-01-08',
-    duration: 42,
-    completed: true,
-    xpEarned: 200,
-    completionRate: 95
-  },
-  {
-    id: '3',
-    planName: 'Speed & Agility Fundamentals',
-    date: '2026-01-06',
-    duration: 30,
-    completed: true,
-    xpEarned: 150,
-    completionRate: 100
-  },
-  {
-    id: '4',
-    planName: 'First Touch Excellence',
-    date: '2026-01-04',
-    duration: 22,
-    completed: false,
-    xpEarned: 80,
-    completionRate: 60
-  },
-  {
-    id: '5',
-    planName: 'Ball Control Mastery',
-    date: '2026-01-02',
-    duration: 45,
-    completed: true,
-    xpEarned: 200,
-    completionRate: 100
-  }
-];
-
-const MOCK_STATS = {
-  totalSessions: 24,
-  completedSessions: 21,
-  totalXP: 3450,
-  averageDuration: 32,
-  currentStreak: 5,
-  longestStreak: 12,
-  thisWeek: {
-    sessions: 3,
-    xp: 550,
-    minutes: 95
-  },
-  thisMonth: {
-    sessions: 12,
-    xp: 1800,
-    minutes: 380
-  }
-};
-
 const TrainingScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('browse');
@@ -196,21 +70,13 @@ const TrainingScreen = ({ navigation }) => {
       }
       setPlansError(null);
 
-      console.log('TrainingScreen - Fetching plans with params:', {
-        visibility: 'public',
-        sortBy: 'recent',
-        sortOrder: 'desc',
-        limit: 50
-      });
-
       const response = await planApi.browsePrograms({
         visibility: 'public',
         sortBy: 'recent',
         sortOrder: 'desc',
-        limit: 50
+        limit: 50,
+        ...(searchQuery ? { searchQuery } : {}),
       });
-      
-      console.log('TrainingScreen - Fetched plans:', response);
 
       setPlans(response.plans || []);
       setPlansTotal(response.total || 0);
@@ -322,17 +188,21 @@ const TrainingScreen = ({ navigation }) => {
   // Map API data to UI format
   const mapPlanToUI = (plan) => ({
     id: plan.programId,
-    name: plan.name,
-    category: plan.sportCategory,
-    difficulty: plan.difficulty.charAt(0).toUpperCase() + plan.difficulty.slice(1),
-    duration: plan.estimatedDuration,
+    name: plan.name || 'Untitled Plan',
+    category: plan.sportCategory || '',
+    difficulty: plan.difficulty
+      ? plan.difficulty.charAt(0).toUpperCase() + plan.difficulty.slice(1)
+      : 'Unknown',
+    duration: plan.estimatedDuration || 0,
     sessions: plan.timesCompleted || 0,
     description: plan.description || 'No description available',
-    exercises: 0, // Not available in API response
+    // Library response includes the plan's tasks; null when absent so the
+    // card can hide the stat rather than show a fake zero.
+    exercises: Array.isArray(plan.tasks) ? plan.tasks.length : null,
     equipment: '', // Not available in API response
   });
 
-  // Filter plans based on search (client-side for now)
+  // Search is applied server-side via the searchQuery param in fetchPlans.
   const filteredPlans = plans.map(mapPlanToUI);
 
   // Filter history based on search
@@ -515,10 +385,12 @@ const TrainingScreen = ({ navigation }) => {
               <Text style={styles.metaIcon}>📋</Text>
               <Text style={styles.metaText}>{plan.sessions} sessions</Text>
             </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>🎯</Text>
-              <Text style={styles.metaText}>{plan.exercises} exercises</Text>
-            </View>
+            {plan.exercises != null && (
+              <View style={styles.metaItem}>
+                <Text style={styles.metaIcon}>🎯</Text>
+                <Text style={styles.metaText}>{plan.exercises} exercises</Text>
+              </View>
+            )}
           </View>
           
           {plan.equipment && (

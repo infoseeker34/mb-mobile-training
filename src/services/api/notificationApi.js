@@ -15,7 +15,6 @@ const notificationApi = {
    */
   async getNotifications(params = {}) {
     try {
-      console.log('notificationApi - getNotifications called with params:', params);
       
       const queryParams = new URLSearchParams();
       
@@ -25,11 +24,8 @@ const notificationApi = {
       }
       
       const url = `/api/notifications${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      console.log('notificationApi - Full URL:', url);
       
       const response = await apiClient.get(url);
-      console.log('notificationApi - Response status:', response.status);
-      console.log('notificationApi - Response data:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -48,10 +44,8 @@ const notificationApi = {
    */
   async getUnreadCount() {
     try {
-      console.log('notificationApi - getUnreadCount called');
       
       const response = await apiClient.get('/api/notifications/unread-count');
-      console.log('notificationApi - Unread count response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.unreadCount;
@@ -71,10 +65,8 @@ const notificationApi = {
    */
   async markAsRead(notificationId) {
     try {
-      console.log('notificationApi - markAsRead called for:', notificationId);
       
       const response = await apiClient.put(`/api/notifications/${notificationId}/read`);
-      console.log('notificationApi - Mark as read response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.notification;
@@ -93,10 +85,8 @@ const notificationApi = {
    */
   async markAllAsRead() {
     try {
-      console.log('notificationApi - markAllAsRead called');
       
       const response = await apiClient.put('/api/notifications/mark-all-read');
-      console.log('notificationApi - Mark all as read response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data.updatedCount;
@@ -116,10 +106,8 @@ const notificationApi = {
    */
   async deleteNotification(notificationId) {
     try {
-      console.log('notificationApi - deleteNotification called for:', notificationId);
       
       const response = await apiClient.delete(`/api/notifications/${notificationId}`);
-      console.log('notificationApi - Delete response:', response.data);
       
       if (response.data.status !== 'success') {
         throw new Error(response.data.message || 'Failed to delete notification');
