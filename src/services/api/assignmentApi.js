@@ -7,6 +7,17 @@
 import apiClient from './apiClient';
 import CacheStorage from '../storage/CacheStorage';
 
+// CNT-1: getUserAssignments caches per user AND per filter combination, so a
+// single mutation can invalidate many keys. Neither update nor delete is given
+// the affected userId (only an assignmentId), and a team assignment changes what
+// every member sees — so evict the whole assignment family rather than guess a
+// key. Over-evicting only costs a refetch; under-evicting serves stale tasks.
+const ASSIGNMENT_CACHE_PREFIX = 'assignments_user_';
+
+const invalidateAssignmentCache = async () => {
+  await CacheStorage.removeByPrefix(ASSIGNMENT_CACHE_PREFIX);
+};
+
 const assignmentApi = {
   /**
    * Get user's plan assignments (personal + team)
@@ -162,6 +173,7 @@ const assignmentApi = {
       const response = await apiClient.post('/api/gamification/assignments', assignmentData);
       
       if (response.data.status === 'success') {
+        await invalidateAssignmentCache();
         return response.data.data.assignment;
       } else {
         throw new Error(response.data.message || 'Failed to create assignment');
@@ -187,6 +199,7 @@ const assignmentApi = {
       );
       
       if (response.data.status === 'success') {
+        await invalidateAssignmentCache();
         return response.data.data.assignment;
       } else {
         throw new Error(response.data.message || 'Failed to update assignment');
@@ -210,6 +223,8 @@ const assignmentApi = {
       if (response.data.status !== 'success') {
         throw new Error(response.data.message || 'Failed to delete assignment');
       }
+
+      await invalidateAssignmentCache();
     } catch (error) {
       console.error('Error deleting assignment:', error);
       throw error;

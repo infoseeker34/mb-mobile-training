@@ -65,6 +65,24 @@ class CacheStorageService {
   }
 
   /**
+   * Remove every cached entry whose (unprefixed) key starts with `prefix`.
+   * Used to evict a whole family of keyed-by-query entries at once — e.g. the
+   * per-filter assignment caches, which fan out into one key per query string.
+   */
+  async removeByPrefix(prefix) {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const match = `${CACHE_PREFIX}${prefix}`;
+      const stale = keys.filter(key => key.startsWith(match));
+      if (stale.length > 0) {
+        await AsyncStorage.multiRemove(stale);
+      }
+    } catch (error) {
+      console.error('Error removing cached data by prefix:', error);
+    }
+  }
+
+  /**
    * Clear all cached data
    */
   async clearAll() {
