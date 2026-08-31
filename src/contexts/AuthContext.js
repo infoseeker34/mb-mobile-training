@@ -11,6 +11,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { COGNITO_CONFIG } from '../constants/Config';
 import SecureStorage from '../services/storage/SecureStorage';
+import CacheStorage from '../services/storage/CacheStorage';
 import authApi from '../services/api/authApi';
 import userApi from '../services/api/userApi';
 import { registerPushToken, unregisterPushToken } from '../services/notifications/pushRegistration';
@@ -319,6 +320,10 @@ export const AuthProvider = ({ children }) => {
       // Unregister push BEFORE clearing tokens — the API call needs auth.
       await unregisterPushToken();
       await SecureStorage.clearTokens();
+      // CNT-1: cached plans/assignments are per-user content with a 5-minute
+      // TTL and no owner in the key, so without this the next account signing
+      // in on this device could be served the previous user's cached data.
+      await CacheStorage.clearAll();
       setUser(null);
       setIsAuthenticated(false);
     } catch (error) {

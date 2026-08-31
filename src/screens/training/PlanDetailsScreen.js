@@ -46,51 +46,66 @@ const PlanDetailsScreen = ({ route, navigation }) => {
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
 
   useEffect(() => {
-    fetchPlanDetails();
-    if (user?.userId) {
-      checkAssignmentStatus();
-    }
+    loadPlanForViewer();
   }, [programId, user?.userId]);
 
-  const fetchPlanDetails = async () => {
+  /**
+   * CNT-1: the assignment is resolved FIRST, because it decides what to show.
+   * An assigned athlete previews the version their assignment pins -- the same
+   * content they will train -- so an author's unpublished edit is invisible
+   * here too. An unassigned viewer sees the current published plan.
+   */
+  const loadPlanForViewer = async () => {
+    setLoading(true);
+    setError(null);
+
+    const assignment = await resolveAssignment();
+
     try {
-      setLoading(true);
-      setError(null);
-      
-      // Fetch program details with tasks from API
-      const program = await planApi.getProgramDetails(programId);
-      
-      setPlanData(program);
-      setLoading(false);
-      
+      if (assignment?.versionId) {
+        const version = await planApi.getPlanVersion(assignment.versionId);
+        setPlanData(version);
+      } else {
+        const program = await planApi.getProgramDetails(programId);
+        setPlanData(program);
+      }
     } catch (err) {
       console.error('Error fetching plan details:', err);
       setError(err.message || 'Failed to load plan details');
+    } finally {
       setLoading(false);
     }
   };
 
-  const checkAssignmentStatus = async () => {
-    if (!user?.userId || !programId) return;
-    
+  // Returns the active assignment (or null). Never throws: a failed assignment
+  // lookup degrades to the unassigned view rather than blocking the screen.
+  const resolveAssignment = async () => {
+    if (!user?.userId || !programId) {
+      setCurrentAssignment(null);
+      setAssignmentType(null);
+      return null;
+    }
+
     try {
       setAssignmentLoading(true);
-      
-      // Check if this program is assigned to the user
+
       const result = await assignmentApi.checkProgramAssignment(user.userId, programId);
-      
-      console.log('Assignment check result:', result);
-      
+
       if (result.isAssigned) {
         setCurrentAssignment(result.assignment);
         setAssignmentType(result.assignmentType);
-      } else {
-        setCurrentAssignment(null);
-        setAssignmentType(null);
+        return result.assignment;
       }
+
+      setCurrentAssignment(null);
+      setAssignmentType(null);
+      return null;
     } catch (err) {
       console.error('Error checking assignment status:', err);
       // Don't show error to user, just log it
+      setCurrentAssignment(null);
+      setAssignmentType(null);
+      return null;
     } finally {
       setAssignmentLoading(false);
     }
@@ -117,8 +132,8 @@ const PlanDetailsScreen = ({ route, navigation }) => {
         Alert.alert('Success', 'Training plan added to your schedule');
       }
       
-      // Refresh assignment status
-      await checkAssignmentStatus();
+      // Refresh: a new/updated assignment can change which version is pinned.
+      await loadPlanForViewer();
     } catch (error) {
       console.error('Error saving assignment:', error);
       throw error; // Let modal handle the error display
@@ -287,7 +302,7 @@ const PlanDetailsScreen = ({ route, navigation }) => {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchPlanDetails}>
+          <TouchableOpacity style={styles.retryButton} onPress={loadPlanForViewer}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
