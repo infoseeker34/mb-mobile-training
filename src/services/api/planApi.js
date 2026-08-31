@@ -15,21 +15,82 @@ const planApi = {
    * @returns {Promise<object>} Program with tasks
    */
   async getProgramDetails(programId) {
-    const plan = await CacheStorage.getWithFallback(
-      `program_details_${programId}`,
+    // CNT-1: the cache entry is keyed by the version it actually holds, so a
+    // cached payload can never masquerade as a newer version. The version id
+    // lives *inside* the response, so it can't be known before the fetch --
+    // hence the pointer entry, which records which versioned key is current.
+    // A publish moves the pointer and lands the new payload under a new key;
+    // the superseded entry is orphaned and ages out on the normal TTL.
+    const pointerKey = `program_details_ptr_${programId}`;
+
+    try {
+      const response = await apiClient.get(`/api/gamification/plans/${programId}`);
+      if (response.data.status !== 'success') {
+        throw new Error(response.data.message || 'Failed to fetch program details');
+      }
+      const plan = response.data.data.plan;
+      const versionedKey = `program_details_${programId}_v${plan.currentVersionId || 'none'}`;
+      await CacheStorage.set(versionedKey, plan);
+      await CacheStorage.set(pointerKey, versionedKey);
+      return plan;
+    } catch (error) {
+      // Offline fallback: follow the pointer to the last known version's payload.
+      console.log('Fetching failed, using cache for program details:', programId);
+      const versionedKey = await CacheStorage.get(pointerKey);
+      const cached = versionedKey ? await CacheStorage.get(versionedKey) : null;
+      if (cached == null) {
+        throw new Error('Failed to fetch program details');
+      }
+      return cached;
+    }
+  },
+
+  /**
+   * Get a published plan VERSION -- an immutable snapshot.
+   * CNT-1: this is what an assigned athlete trains. The assignment pins a
+   * versionId, and that pin does not move when the author edits or even
+   * republishes the plan (until an explicit roll-forward), so reading through
+   * here is what keeps in-progress authoring invisible to assigned athletes.
+   *
+   * Returned plan-shaped so screens consume it exactly like getProgramDetails:
+   * the wire puts the full-fidelity tasks at `version.snapshot.tasks`, not
+   * `version.tasks`.
+   *
+   * @param {string} versionId - Plan version ID (from an assignment's versionId)
+   * @returns {Promise<object>} Plan-shaped snapshot with tasks
+   */
+  async getPlanVersion(versionId) {
+    if (!versionId) {
+      throw new Error('versionId is required');
+    }
+
+    // A version snapshot is immutable, so the id alone is a complete cache key
+    // -- there is no such thing as a stale entry for a given versionId.
+    const version = await CacheStorage.getWithFallback(
+      `plan_version_${versionId}`,
       async () => {
-        const response = await apiClient.get(`/api/gamification/plans/${programId}`);
+        const response = await apiClient.get(
+          `/api/gamification/plans/versions/${versionId}`
+        );
         if (response.data.status !== 'success') {
-          throw new Error(response.data.message || 'Failed to fetch program details');
+          throw new Error(response.data.message || 'Failed to fetch plan version');
         }
-        return response.data.data.plan;
+        return response.data.data.version;
       }
     );
 
-    if (plan == null) {
-      throw new Error('Failed to fetch program details');
+    if (version == null) {
+      throw new Error('Failed to fetch plan version');
     }
-    return plan;
+
+    const snapshot = version.snapshot || {};
+    return {
+      ...snapshot,
+      programId: version.programId || snapshot.programId,
+      versionId: version.versionId || versionId,
+      versionNo: version.versionNo,
+      tasks: snapshot.tasks || [],
+    };
   },
 
   /**

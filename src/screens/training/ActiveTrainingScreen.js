@@ -22,6 +22,7 @@ import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/api/apiClient';
 import planApi from '../../services/api/planApi';
+import assignmentApi from '../../services/api/assignmentApi';
 import { APP_CONFIG } from '../../constants/Config';
 import Colors from '../../constants/Colors';
 import Layout from '../../constants/Layout';
@@ -31,15 +32,30 @@ const VIDEO_HEIGHT = SCREEN_WIDTH * 0.5; // Optimized for space usage
 
 // Session autosave: an in-progress session snapshot survives an app kill and
 // is offered for resume when the same program is reopened soon after.
-const SESSION_SNAPSHOT_KEY = 'active_session_snapshot';
+//
+// CNT-1: the snapshot key is scoped per program AND per version. It used to be
+// a single global key, so a snapshot taken against one version could be
+// restored on top of a different one -- its currentTaskIndex then pointed at a
+// different exercise entirely. Scoping the key means a superseded snapshot is
+// never even found; the explicit versionId check below is the second gate, and
+// it also catches a pre-CNT-1 snapshot written under the legacy key.
+const SESSION_SNAPSHOT_KEY_PREFIX = 'active_session_snapshot_';
+const LEGACY_SESSION_SNAPSHOT_KEY = 'active_session_snapshot';
 const SNAPSHOT_MAX_AGE_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+const snapshotKeyFor = (programId, versionId) =>
+  `${SESSION_SNAPSHOT_KEY_PREFIX}${programId || 'unknown'}_v${versionId || 'none'}`;
 
 const ActiveTrainingScreen = ({ route, navigation }) => {
   const { planData: initialPlanData, assignmentId, planId, programId } = route.params || {};
   
-  const [planData, setPlanData] = useState(initialPlanData);
-  const [loadingPlan, setLoadingPlan] = useState(!initialPlanData);
+  // An assignment-driven run must resolve its PINNED version before it can
+  // show anything, so any planData handed over by the previous screen (which
+  // was loaded from the live plan) is deliberately not trusted here.
+  const [planData, setPlanData] = useState(assignmentId ? null : initialPlanData);
+  const [loadingPlan, setLoadingPlan] = useState(assignmentId ? true : !initialPlanData);
   const [planError, setPlanError] = useState(null);
+  const [versionId, setVersionId] = useState(null);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [timerPaused, setTimerPaused] = useState(false);
@@ -55,6 +71,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   const [taskTimes, setTaskTimes] = useState({}); // taskId -> actual seconds spent
   const resumeCheckedRef = useRef(false);
   const snapshotRef = useRef(null);
+  const sessionStartRef = useRef(false);
   
   // Audio players using expo-audio
   const player30s = useAudioPlayer(require('../../assets/sounds/beep.mp3'));
@@ -72,6 +89,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   snapshotRef.current = {
     sessionId,
     programId: planData?.programId || programId || planId || null,
+    versionId,
     currentTaskIndex,
     totalTrainingTime,
     completedTasks,
@@ -85,7 +103,7 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     if (!snapshot || !snapshot.inProgress || !snapshot.programId) return;
     try {
       await AsyncStorage.setItem(
-        SESSION_SNAPSHOT_KEY,
+        snapshotKeyFor(snapshot.programId, snapshot.versionId),
         JSON.stringify({ ...snapshot, timestamp: Date.now() })
       );
     } catch (error) {
@@ -94,8 +112,11 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
   };
 
   const clearSnapshot = async () => {
+    const snapshot = snapshotRef.current;
     try {
-      await AsyncStorage.removeItem(SESSION_SNAPSHOT_KEY);
+      await AsyncStorage.removeItem(
+        snapshotKeyFor(snapshot?.programId, snapshot?.versionId)
+      );
     } catch (error) {
       console.error('Error clearing session snapshot:', error);
     }
@@ -103,23 +124,45 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
 
   const offerResumeIfAvailable = async () => {
     try {
-      const raw = await AsyncStorage.getItem(SESSION_SNAPSHOT_KEY);
+      // A pre-CNT-1 snapshot lives under the old global key and carries no
+      // version at all, so there is no way to prove which version its task
+      // index refers to. Discard it rather than risk restoring an index into a
+      // different exercise list.
+      await AsyncStorage.removeItem(LEGACY_SESSION_SNAPSHOT_KEY);
+
+      const currentProgramId = planData?.programId || programId || planId || null;
+      const snapshotKey = snapshotKeyFor(currentProgramId, versionId);
+      const raw = await AsyncStorage.getItem(snapshotKey);
       if (!raw) return;
 
       const snapshot = JSON.parse(raw);
       const isFresh =
         snapshot.timestamp && Date.now() - snapshot.timestamp < SNAPSHOT_MAX_AGE_MS;
       if (!isFresh) {
-        await clearSnapshot();
+        await AsyncStorage.removeItem(snapshotKey);
+        return;
+      }
+
+      // CNT-1 (AC): the snapshot must belong to the exact version being
+      // trained. The scoped key already makes a mismatch unfindable; this is
+      // the explicit gate. A resumed index against a different task list is a
+      // silent corruption -- restoring the WRONG exercise is strictly worse
+      // than losing the resume, so a mismatch discards the snapshot.
+      if ((snapshot.versionId || null) !== (versionId || null)) {
+        console.log('Discarding session snapshot: version mismatch');
+        await AsyncStorage.removeItem(snapshotKey);
         return;
       }
 
       const taskCount = planData?.tasks?.length || 0;
       const isResumable =
-        snapshot.programId === planData?.programId &&
+        snapshot.programId === currentProgramId &&
         (snapshot.currentTaskIndex > 0 || snapshot.totalTrainingTime > 0) &&
         snapshot.currentTaskIndex < taskCount;
-      if (!isResumable) return;
+      if (!isResumable) {
+        await AsyncStorage.removeItem(snapshotKey);
+        return;
+      }
 
       Alert.alert(
         'Resume Session?',
@@ -129,7 +172,9 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
             text: 'Start Over',
             style: 'destructive',
             onPress: () => {
-              clearSnapshot();
+              AsyncStorage.removeItem(snapshotKey).catch(err =>
+                console.error('Error clearing session snapshot:', err)
+              );
             },
           },
           {
@@ -171,22 +216,58 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     }
   }, [currentTaskIndex]);
 
-  // Fetch plan data if not provided
+  // Resolve what this run actually trains, before anything is rendered.
   useEffect(() => {
-    if (!initialPlanData && (planId || programId)) {
-      fetchPlanData();
-    }
+    resolveTrainingContent();
   }, []);
 
-  const fetchPlanData = async () => {
+  /**
+   * CNT-1 (AC): an assignment-driven run trains the version the assignment
+   * PINS -- never the author's live working copy. The assignment is read fresh
+   * (assignmentApi.getAssignment is uncached) so a roll-forward is picked up
+   * immediately, and its versionId then selects an immutable snapshot. Ad-hoc
+   * (unassigned) training keeps using the current published plan, which is
+   * correct: there is no pin to honour.
+   */
+  const resolveTrainingContent = async () => {
+    setLoadingPlan(true);
+    setPlanError(null);
     try {
-      setLoadingPlan(true);
-      setPlanError(null);
-      const id = planId || programId;
+      if (assignmentId) {
+        const assignment = await assignmentApi.getAssignment(assignmentId);
+        const pinnedVersionId = assignment?.versionId;
+
+        if (pinnedVersionId) {
+          const version = await planApi.getPlanVersion(pinnedVersionId);
+          setVersionId(version.versionId || pinnedVersionId);
+          setPlanData(version);
+          return;
+        }
+
+        // No pin recorded. Fall through to the live plan rather than dead-end
+        // the athlete; this is the legacy-assignment path.
+        console.warn('Assignment has no pinned version; using the current plan');
+      }
+
+      if (initialPlanData && !assignmentId) {
+        setVersionId(initialPlanData.currentVersionId || null);
+        setPlanData(initialPlanData);
+        return;
+      }
+
+      const id = planId || programId || initialPlanData?.programId;
+      if (!id) {
+        setPlanError('Failed to load training plan');
+        return;
+      }
+
       const plan = await planApi.getProgramDetails(id);
+      setVersionId(plan.currentVersionId || null);
       setPlanData(plan);
     } catch (error) {
-      console.error('Error fetching plan data:', error);
+      // An archived plan or a deleted version lands here and shows the normal
+      // error state rather than rendering a blank screen.
+      console.error('Error resolving training content:', error);
       setPlanError('Failed to load training plan');
     } finally {
       setLoadingPlan(false);
@@ -208,10 +289,15 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
     setTaskStartTime(null);
   }, [currentTaskIndex]);
 
-  // Start session when component mounts
+  // Start the session only once the content is resolved -- an assignment-driven
+  // run has no planData at mount (it is still resolving its pinned version),
+  // and startTrainingSession needs planData.programId.
   useEffect(() => {
-    startTrainingSession();
-  }, []);
+    if (planData && !sessionStartRef.current) {
+      sessionStartRef.current = true;
+      startTrainingSession();
+    }
+  }, [planData]);
 
   // Complete session when all tasks are done
   useEffect(() => {
@@ -509,15 +595,15 @@ const ActiveTrainingScreen = ({ route, navigation }) => {
           <TouchableOpacity 
             style={styles.retryButton}
             onPress={() => {
-              if (planId || programId) {
-                fetchPlanData();
+              if (assignmentId || planId || programId || initialPlanData) {
+                resolveTrainingContent();
               } else {
                 navigation.goBack();
               }
             }}
           >
             <Text style={styles.retryButtonText}>
-              {planId || programId ? 'Retry' : 'Go Back'}
+              {assignmentId || planId || programId || initialPlanData ? 'Retry' : 'Go Back'}
             </Text>
           </TouchableOpacity>
         </View>
