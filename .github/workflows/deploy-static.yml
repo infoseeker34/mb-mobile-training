@@ -7,7 +7,7 @@ name: Deploy Mobile Web to S3/CloudFront
 on:
   push:
     branches:
-      - main
+      - develop
       - staging
     paths:
       - 'src/**'
@@ -45,7 +45,10 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ inputs.environment }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            # develop is the integration branch: verified PRs merge here and
+            # deploy to dev. main is promoted by a human and does not
+            # auto-deploy; prod is manual workflow_dispatch (environment=prod).
             ENV="dev"
           elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
             ENV="staging"
